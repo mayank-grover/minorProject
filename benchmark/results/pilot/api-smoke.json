@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "request_id": "real-api-smoke-001",
+  "occurrence_id": "pilot-01",
+  "description": "A sunflower with yellow petals and a brown center is in front of a blue sky.",
+  "mode": "context_aware",
+  "detail": "concise",
+  "model_id": "HuggingFaceTB/SmolVLM2-2.2B-Instruct",
+  "model_revision": "482adb537c021c86670beed01cd58990d01e72e4",
+  "prompt_version": "ab-1",
+  "inference_ms": 6004.873874997429,
+  "total_ms": 6097.310292003385,
+  "image_hash": "0b26feb48a993968c3fc5ddc9e4e6fd6465f780bfedc433ec6f2404fa47c198a",
+  "context_hash": "925098bc72cccf3cd8f865d24ee678c617c4989231b440808a84b24fe9679e6a",
+  "generated": true,
+  "limitations": [
+    "AI-generated; visual facts and contextual claims may be incorrect."
+  ]
+}

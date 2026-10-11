@@ -1,0 +1,6 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Wikipedia descriptions — local backend</title>
+<style>body{font:18px/1.6 system-ui;max-width:42rem;margin:3rem auto;padding:1rem;color:#17202a}input{display:block;width:100%;padding:.6rem;font:inherit;box-sizing:border-box}button{font:inherit;padding:.5rem 1rem;margin-top:1rem}:focus-visible{outline:3px solid #005fcc}</style></head>
+<body><h1>Local inference setup</h1><p>This extension sends only your selected Wikimedia image and bounded Wikipedia context to <strong>http://127.0.0.1:8000</strong>. Inference runs on your computer. No paid service is used.</p>
+<p>Copy the extension ID from <a href="https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked">Chrome's extension manager</a> into the backend's ALLOWED_EXTENSION_ID setting and restart it.</p>
+<form id="settings"><label for="token">Local backend token (from your .env file)</label><input id="token" type="password" autocomplete="off" required><button type="submit">Save token</button></form><p id="status" role="status" aria-live="polite"></p><script src="options.js"></script></body></html>

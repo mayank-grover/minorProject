@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Wikipedia Image Descriptions",
+  "version": "0.1.0",
+  "description": "On-demand, context-aware descriptions using a local vision-language model.",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": ["http://127.0.0.1:8000/*", "https://upload.wikimedia.org/*", "https://thumb.wikimedia.org/*"],
+  "background": {"service_worker": "service_worker.js"},
+  "action": {"default_title": "Toggle Wikipedia image descriptions"},
+  "options_page": "options.html",
+  "content_scripts": [{"matches": ["https://en.wikipedia.org/wiki/*"], "js": ["context_extractor.js", "content.js"]}]
+}

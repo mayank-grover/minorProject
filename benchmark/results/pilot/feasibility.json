@@ -1,0 +1,29 @@
+{
+  "hardware": "Apple M2 / 16 GB RAM",
+  "platform": "macOS-27.0.1-arm64-arm-64bit",
+  "configuration": {
+    "model_id": "HuggingFaceTB/SmolVLM2-2.2B-Instruct",
+    "revision": "482adb537c021c86670beed01cd58990d01e72e4",
+    "device": "mps",
+    "dtype": "torch.float16",
+    "do_sample": false,
+    "max_new_tokens": 128,
+    "attention": "eager",
+    "processor": "official; image splitting enabled; longest_edge=768; patch=384",
+    "preprocessing": "rgb-768-v1"
+  },
+  "load_seconds": 25.719810124996002,
+  "source": "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/bee.jpg",
+  "real_image": {
+    "text": "A bee is on a pink flower. There are other flowers in the background.",
+    "inference_ms": 5469.736375001958,
+    "tokens": 17,
+    "finish_reason": "stop"
+  },
+  "swapped_fixture": {
+    "text": "A red square is on a white background.",
+    "inference_ms": 3642.546124996443,
+    "tokens": 10,
+    "finish_reason": "stop"
+  }
+}
