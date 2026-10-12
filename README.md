@@ -27,13 +27,10 @@ On this prepared machine `.venv` already exists; activate it directly. `scripts.
 2. Select the `extension` folder inside your cloned `minorProject` folder.
 3. Copy the generated extension ID into `ALLOWED_EXTENSION_ID` in `.env`.
 4. Open this extension's **Details → Extension options**. Save the same `LOCAL_BACKEND_TOKEN` from `.env`.
-5. Start the backend:
+5. Start the backend from your project folder:
 
 ```sh
-source .venv/bin/activate
-export HF_HOME="$PWD/.cache/huggingface"
-export PYTORCH_ENABLE_MPS_FALLBACK=1
-python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000
+python3 run.py
 ```
 
 Model loading precedes service readiness. Do not use `--reload` for the live demo; it reloads large weights when files change. In a second terminal:
