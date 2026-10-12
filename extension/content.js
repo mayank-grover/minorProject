@@ -92,7 +92,7 @@
     const url = location.href;
     active = {img, index, trigger, item, pending: true}; opener = trigger;
     let payload;
-    try { payload = WikiContext.extract(img, index); payload.detail = detail; }
+    try { payload = WikiContext.extract(img, index); payload.detail = detail; payload.image_type = item.type.value; }
     catch (error) { active.pending = false; status.textContent = error.message; return; }
     const snapshot = JSON.stringify({...payload, request_id: null});
     status.textContent = 'Generating description. Local inference may take up to two minutes.';
@@ -102,7 +102,7 @@
     try {
       const response = await chrome.runtime.sendMessage({type: 'DESCRIBE', payload});
       if (id !== generation || !enabled || !img.isConnected || location.href !== url) return;
-      const current = WikiContext.extract(img, index); current.detail = detail;
+      const current = WikiContext.extract(img, index); current.detail = detail; current.image_type = item.type.value;
       if (JSON.stringify({...current, request_id: null}) !== snapshot) {
         active.pending = false; status.textContent = 'Image or article context changed. Please request a fresh description.'; controls.replaceChildren(); return;
       }
@@ -113,7 +113,7 @@
       active.pending = false;
       heading.textContent = `AI-generated description for image ${index + 1}`;
       result.querySelector('.description').textContent = data.description;
-      result.querySelector('.metadata').textContent = `${data.model_id} · ${(data.inference_ms / 1000).toFixed(1)} s inference · Local processing`;
+      result.querySelector('.metadata').textContent = `${data.model_id} · ${(data.inference_ms / 1000).toFixed(1)} s inference · Local processing${data.image_type ? ' · ' + data.image_type + ' description' : ''}`;
       result.querySelector('.limitations').textContent = data.limitations.join(' ');
       result.hidden = false;
       status.textContent = 'Description ready. Use Read description to move to the result.';
@@ -140,6 +140,13 @@
       const snapshot = WikiContext.extract(img, index);
       const name = snapshot.context.caption?.slice(0, 80) || `image ${index + 1}`;
       const wrapper = el('div', '', {'data-wiki-description-control': ''});
+      const typeID = `wiki-description-type-${crypto.randomUUID()}`;
+      const type = el('select', '', {id:typeID});
+      for (const [value, name] of [['auto','Automatic'], ['photo','Photo'], ['flag','Flag'], ['chart','Chart'], ['map','Map'], ['process','Process or lifecycle'], ['diagram','Other diagram']]) {
+        type.append(el('option', name, {value}));
+      }
+      const typeLabel = el('label', 'Description style ', {for:typeID});
+      typeLabel.append(type);
       const resultID = `wiki-description-result-${crypto.randomUUID()}`;
       const surface = el('div', '', {class: 'wiki-description-surface', hidden: ''});
       const status = el('p', '', {role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true'});
@@ -150,9 +157,9 @@
       surface.append(status, controls, result);
       const trigger = button(`Describe ${name}`, () => describe(img, WikiContext.eligible().indexOf(img), trigger));
       trigger.setAttribute('aria-controls', resultID);
-      wrapper.append(trigger, surface);
+      wrapper.append(trigger, typeLabel, surface);
       const link = img.closest('a'); (link || img).after(wrapper);
-      registered.set(img, {wrapper, trigger, surface, status, controls, result, heading});
+      registered.set(img, {wrapper, trigger, surface, status, controls, result, heading, type});
     });
     list.replaceChildren(...images.map((img, index) => button(`Go to image ${index + 1}`, () => {
       const trigger = registered.get(img).trigger; trigger.scrollIntoView({block: 'center'}); trigger.focus();

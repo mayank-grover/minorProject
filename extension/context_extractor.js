@@ -23,6 +23,48 @@
     });
   };
   const occurrences = new WeakMap();
+  function pageContext(article, img, title) {
+    const blocks = [...article.querySelectorAll('h2,h3,p')].filter(el => !el.closest('.infobox,.navbox,.metadata,.ambox,.reflist,figure,.thumb,.gallerybox'));
+    const firstHeading = blocks.find(el => el.matches('h2'));
+    const lead = blocks.filter(el => el.matches('p') && (!firstHeading || (el.compareDocumentPosition(firstHeading) & Node.DOCUMENT_POSITION_FOLLOWING)) && (clean(el, 1000) || '').length > 60);
+    const cards = [...article.querySelectorAll('.infobox.vcard')];
+    const box = article.querySelector('.infobox.biography') || cards.find(card => [...card.querySelectorAll('th')].some(th => /^(?:Born|Birth name)$/i.test(clean(th,100) || '')));
+    const biography = !!box;
+    const subject = biography ? (clean(box.querySelector('.infobox-above,.fn'), 200) || title) : null;
+    const aliases = [...new Set((lead[0] ? [...lead[0].querySelectorAll('b,strong')].map(el => clean(el,100)) : []).filter(Boolean))];
+    if (box) {
+      for (const row of box.querySelectorAll('tr')) {
+        const label = clean(row.querySelector('th'), 100) || '';
+        if (/^(?:Birth name|Born|Other names|Also known as)$/i.test(label)) {
+          const cell = row.querySelector('td');
+          const names = cell?.querySelectorAll('li').length ? [...cell.querySelectorAll('li')].map(el => clean(el,100)) : [clean(cell,100)?.split(/\(|\d/)[0].trim()];
+          aliases.push(...names.filter(Boolean));
+        }
+      }
+    }
+    // Include major sections across the article before filling with subsections.
+    const outline = [...blocks.filter(el => el.matches('h2')), ...blocks.filter(el => el.matches('h3'))].map(el => clean(el,80)).filter(Boolean).slice(0,12);
+    const summaries = [];
+    let heading = null;
+    for (const block of blocks) {
+      if (block.matches('h2')) heading = clean(block,70);
+      else if (block.matches('p') && heading && summaries.length < 5) {
+        const text = clean(block,140);
+        if (text) summaries.push(`${heading}: ${text}`);
+        heading = null;
+      }
+    }
+    const images = eligible();
+    const first = images[0];
+    const main = box?.querySelector('.infobox-image img') || box?.querySelector('img');
+    const beforeSections = !firstHeading || !!(img.compareDocumentPosition(firstHeading) & Node.DOCUMENT_POSITION_FOLLOWING);
+    const role = img === main || (img === first && beforeSections) ? 'lead' : 'contextual';
+    const inventory = [...article.querySelectorAll('figcaption,.thumbcaption,.gallerytext,.infobox-caption')].map(el => clean(el,90)).filter(Boolean).slice(0,8);
+    return {page_summary:[clean(lead[0],650), ...summaries].filter(Boolean).join(' ').slice(0,1200),
+      section_outline:outline, image_overview:inventory, article_kind:biography ? 'biography' : 'general',
+      subject_name:subject, subject_aliases:[...new Set(aliases)].slice(0,8),
+      image_position:images.indexOf(img), image_role:role, lead_subject_association:!!(subject && img === main)};
+  }
   function associatedLabel(img, container) {
     // Country infoboxes often have separate flag/arms wrappers in the same cell.
     // Only use a nearby article link in a wrapper containing this image alone.
@@ -55,7 +97,15 @@
       caption = img.closest('tr')?.querySelector('.infobox-caption');
     }
     let captionText = clean(caption, 1200);
-    if (!captionText) captionText = associatedLabel(img, container);
+    let captionSubject = null;
+    if (caption) {
+      const link = caption.querySelector('a[href*="/wiki/"]');
+      if (link && !new URL(link.href).pathname.includes(':')) {
+        const prefix = clean(caption,1200).split(clean(link,200))[0].trim();
+        if (/^(?:The|A|An)?$/i.test(prefix)) captionSubject = (prefix ? prefix + ' ' : '') + clean(link,180);
+      }
+    }
+    if (!captionText) { captionText = associatedLabel(img, container); captionSubject = captionText; }
     if (captionText === null && img.closest('.infobox')) {
       const row = img.closest('tr');
       // Associated text comes only from this image's own row, not other images' rows.
@@ -80,14 +130,15 @@
         if (clean(block, 1600)) { following = block; break; }
       }
     }
-    const nearby = [clean(preceding, 1600), clean(following, 1600)].filter(Boolean).join(' ').split(/\s+/).slice(0, 240).join(' ');
+    const nearby = [clean(preceding, 1000), clean(following, 1000)].filter(Boolean).join(' ').split(/\s+/).slice(0, 100).join(' ');
     const title = clean(document.querySelector('#firstHeading'), 300) || document.title.replace(/ - Wikipedia$/, '').slice(0, 300);
     return {
       schema_version: '1.0', request_id: crypto.randomUUID(), occurrence_id: occurrences.get(img),
       article_url: `${location.origin}${location.pathname}`,
       revision_id: Number(document.querySelector('meta[property="mw:revisionId"]')?.content) || null,
       image_url: img.currentSrc || img.src,
-      context: {article_title: title, caption: captionText, section_heading: clean(section, 300),
+      context: {...pageContext(article,img,title), caption_subject:captionSubject,
+        article_title: title, caption: captionText, section_heading: clean(section, 300),
         nearby_text: nearby || null, existing_alt: img.hasAttribute('alt') ? img.getAttribute('alt').slice(0, 600) : null},
       mode: 'context_aware', detail: 'concise'
     };

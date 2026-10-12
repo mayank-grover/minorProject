@@ -1,4 +1,14 @@
-# Decisions — 11 October 2026
+# Decisions
+
+## General article context and image emphasis — 12 October 2026
+
+Implemented ab-6: bounded lead/section/caption overview, biography aliases and image roles, appearance emphasis for the main biography photo or explicitly appearance-focused later photos, and action/setting emphasis for later contextual photos. Major headings receive priority so one section's many subsections do not consume the entire outline. Country infoboxes do not receive biography treatment. Identity is integrated into prose rather than prepending the whole caption. Full behavior, source limits and activation steps are in [article_context.md](article_context.md).
+
+46 Python and 13 extension tests passed. Fictional biography fixtures verify the rules independently of any specific artist; tests cover different-person captions, later close-ups, a non-biography lead image, nested context hashing and image-only isolation. Real ab-6 API tests used the main Lil Wayne photo and the later Voodoo Music Experience photo downloaded from Wikipedia. Ignored local records are in `artifacts/article-context/verification-initial.json` and `verification-final.json`. Both descriptions associate Carter with Lil Wayne using explicit aliases. The refined lead output includes hair, clothing, chains and tattoos; later output emphasizes stage action. The model still omitted some visible appearance detail and called the later headwear a helmet/goggles, illustrating persistent visual errors. Appearance emphasis is a prompt policy, not a completeness or factual guarantee. The final generic-opening substitution also handles “The image shows a man …” without adding a duplicate identifying sentence, verified separately by a unit test.
+
+## Image-type routing and OCR — 12 October 2026
+
+Implemented prompt ab-5, a user-overridable automatic image-type route, and bounded local Tesseract OCR with approximate word-position cues. Installed Tesseract on the development Mac after Apple Vision missed runtime deadlines. Full implementation, observed outputs, failures and setup are recorded in [image_type_pipeline.md](image_type_pipeline.md). 52 automated tests passed; real chart/process cases were useful, while map relations and photo richness remain model limitations. Historical pilot artifacts are unchanged.
 
 ## Identity before appearance — 12 October 2026
 

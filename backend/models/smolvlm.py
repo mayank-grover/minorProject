@@ -35,15 +35,20 @@ class SmolVLM:
             attn_implementation='eager', low_cpu_mem_usage=True,
         ).to(self.device).eval()
         self.revision = getattr(self.model.config, '_commit_hash', None) or self.revision
+        from backend.engine.ocr import LocalOCR
+        self.ocr = LocalOCR()
+        self.ocr.load()
         self.ready = True
 
     def configuration(self):
         return {'model_id': self.model_id, 'revision': self.revision, 'device': self.device,
                 'dtype': str(getattr(self, 'dtype', 'unloaded')), 'do_sample': False,
                 'max_new_tokens': self.max_new_tokens, 'attention': 'eager',
-                'processor': 'official; image splitting enabled; longest_edge=768; patch=384', 'preprocessing': 'rgb-768-v1'}
+                'processor': 'official; image splitting enabled; longest_edge=768; patch=384', 'preprocessing': 'rgb-768-v1',
+                'ocr_engine': getattr(getattr(self, 'ocr', None), 'engine', 'unavailable'),
+                'ocr_preprocessing': 'rgb-1600; tesseract-psm11+6; bounded-words-v1', 'image_routing': 'types-v1'}
 
-    def generate(self, image, prompt):
+    def generate(self, image, prompt, max_new_tokens=None):
         import torch
         if not self.ready:
             raise RuntimeError('Model is not loaded')
@@ -56,12 +61,22 @@ class SmolVLM:
         self._sync(torch)
         start = time.perf_counter()
         with torch.inference_mode():
-            output = self.model.generate(**inputs, do_sample=False, max_new_tokens=self.max_new_tokens)
+            budget = max_new_tokens or self.max_new_tokens
+            output = self.model.generate(**inputs, do_sample=False, max_new_tokens=budget)
         self._sync(torch)
         elapsed = (time.perf_counter() - start) * 1000
         generated = output[0, inputs['input_ids'].shape[1]:]
         result = self.processor.decode(generated, skip_special_tokens=True).strip()
-        return ModelOutput(result, elapsed, len(generated), 'length' if len(generated) >= self.max_new_tokens else 'stop')
+        return ModelOutput(result, elapsed, len(generated), 'length' if len(generated) >= budget else 'stop')
+
+    def classify_image(self, image):
+        prompt = ('Classify the visible image. Reply with exactly one word: '
+                  'photo, flag, chart, map, process, or diagram. '
+                  'A process shows ordered steps or a cycle. A chart plots data. '
+                  'Use photo for ordinary photographs.')
+        output = self.generate(image, prompt, max_new_tokens=8)
+        kind = output.text.strip().lower().strip('." ')
+        return kind if kind in ('photo', 'flag', 'chart', 'map', 'process', 'diagram') else 'photo'
 
     def _sync(self, torch):
         if self.device == 'mps':

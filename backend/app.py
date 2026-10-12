@@ -81,6 +81,7 @@ def create_app(settings=None, model=None):
         return {'status': 'ok' if adapter.ready else 'degraded', 'model_ready': adapter.ready,
                 'model_id': adapter.model_id, 'model_revision': adapter.revision,
                 'processing': 'local', 'busy': lane.locked(), 'schema_version': '1.0',
+                'ocr_engine': getattr(getattr(adapter, 'ocr', None), 'engine', 'unavailable'),
                 'authentication_configured': bool(settings.token),
                 'extension_configured': bool(settings.extension_id),
                 'configuration_fingerprint': hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()[:16]}
@@ -90,7 +91,9 @@ def create_app(settings=None, model=None):
         try:
             data = decode_base64(payload.image_base64) if payload.image_base64 else fetch_image(payload.image_url, settings.user_agent)
             image, _, digest, animated = prepare_image(data)
-            result = run_generation(adapter, image, payload.context, payload.mode, payload.detail)
+            ocr_image = prepare_image(data, max_side=1600)[0] if getattr(adapter, 'ocr', None) else image
+            result = run_generation(adapter, image, payload.context, payload.mode, payload.detail,
+                                    ocr_image=ocr_image, requested_type=payload.image_type)
             limitations = result['limitations']
             if animated:
                 limitations.append('Only the first animation frame was described.')
@@ -98,7 +101,8 @@ def create_app(settings=None, model=None):
                 description=result['description'], mode=payload.mode, detail=payload.detail,
                 model_id=adapter.model_id, model_revision=adapter.revision, prompt_version=result['prompt_version'],
                 inference_ms=result['inference_ms'], total_ms=(time.perf_counter()-start)*1000,
-                image_hash=digest, context_hash=result['context_hash'], limitations=limitations)
+                image_hash=digest, context_hash=result['context_hash'], limitations=limitations,
+                image_type=result['image_type'], ocr_status=result['ocr_status'], analysis_ms=result['analysis_ms'])
             log.info('request=%s status=ok inference_ms=%.1f', payload.request_id, response.inference_ms)
             return response
         finally:

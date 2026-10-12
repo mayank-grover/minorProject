@@ -1,4 +1,5 @@
 from typing import Literal
+import json
 from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, model_validator, field_validator
 
@@ -25,6 +26,16 @@ def validate_image_url(value):
     return value
 
 class Context(StrictModel):
+    page_summary: str | None = Field(default=None, max_length=1200)
+    section_outline: list[str] = Field(default_factory=list, max_length=12)
+    image_overview: list[str] = Field(default_factory=list, max_length=8)
+    article_kind: Literal['general', 'biography'] = 'general'
+    subject_name: str | None = Field(default=None, max_length=200)
+    subject_aliases: list[str] = Field(default_factory=list, max_length=8)
+    caption_subject: str | None = Field(default=None, max_length=200)
+    image_position: int | None = Field(default=None, ge=0)
+    image_role: Literal['lead', 'contextual'] | None = None
+    lead_subject_association: bool = False
     article_title: str = Field(min_length=1, max_length=300)
     caption: str | None = Field(default=None, max_length=1200)
     section_heading: str | None = Field(default=None, max_length=300)
@@ -32,6 +43,7 @@ class Context(StrictModel):
     existing_alt: str | None = Field(default=None, max_length=600)
 
 class DescribeRequest(StrictModel):
+    image_type: Literal['auto', 'photo', 'flag', 'chart', 'map', 'process', 'diagram'] = 'auto'
     schema_version: Literal['1.0'] = '1.0'
     request_id: str = Field(min_length=1, max_length=64)
     occurrence_id: str = Field(min_length=1, max_length=128)
@@ -48,12 +60,15 @@ class DescribeRequest(StrictModel):
 
     @model_validator(mode='after')
     def context_budget(self):
-        text = ' '.join(x for x in self.context.model_dump().values() if x is not None)
+        text = json.dumps(self.context.model_dump(exclude_none=True), ensure_ascii=False)
         if len(text) > 8000 or len(text.split()) > 800:
             raise ValueError('Context exceeds 800 words / 8000 characters')
         return self
 
 class DescribeResponse(StrictModel):
+    image_type: Literal['photo', 'flag', 'chart', 'map', 'process', 'diagram'] | None = None
+    ocr_status: Literal['ok', 'no_text', 'failed', 'unavailable'] | None = None
+    analysis_ms: float = Field(default=0, ge=0)
     schema_version: Literal['1.0'] = '1.0'
     request_id: str
     occurrence_id: str

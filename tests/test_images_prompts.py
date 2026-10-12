@@ -89,7 +89,9 @@ def test_named_source_label_precedes_generic_model_description(fake_model, capti
     fake_model.generate = lambda *args: ModelOutput(raw, 1, 9, 'stop')
     context = Context(article_title='Germany', caption=caption, existing_alt='ALT-CANARY')
     result = run_generation(fake_model, Image.new('RGB', (64,64)), context, 'context_aware')
-    assert result['description'] == 'Wikipedia labels this image: ' + caption + '. ' + raw
+    assert caption.lower() in result['description'].lower()
+    assert 'Wikipedia labels' not in result['description']
+    assert raw in result['description']
     assert result['raw_output'] == raw
     assert 'ALT-CANARY' not in result['prompt']
     baseline = run_generation(fake_model, Image.new('RGB', (64,64)), context, 'image_only')

@@ -149,3 +149,34 @@ test('a named monument caption is preserved and a file name alone does not suppl
   assert.equal(window.WikiContext.extract(figure.querySelector('img'),0).context.caption,null);
   dom.window.close();
 });
+
+test('description style defaults to automatic and sends the selected accessible option',async()=>{
+  let sent;
+  const env=setup(async m=>{sent=m.payload;return {result:{...m.payload,description:'A process.',model_id:'test',inference_ms:1,limitations:[],image_type:'process'}}});env.loadUI();
+  const w=env.window.document.querySelector('[data-wiki-description-control]');const select=w.querySelector('select');
+  assert.equal(select.value,'auto');assert.equal(w.querySelector('label').htmlFor,select.id);
+  select.value='process';w.querySelector('button').click();await tick();
+  assert.equal(sent.image_type,'process');assert(w.querySelector('.metadata').textContent.includes('process description'));
+  assert(namedButton(w,'Read aloud'));env.dom.window.close();
+});
+
+test('biography context contains explicit aliases, a bounded page overview and distinct image roles',()=>{
+  const {window,dom}=setup();const d=window.document;
+  d.querySelector('#firstHeading').textContent='Maya Sol';
+  d.querySelector('#mw-content-text').innerHTML='<div class="mw-parser-output"><table class="infobox biography vcard"><tr><th class="infobox-above">Maya Sol</th></tr><tr><td class="infobox-image"><img src="https://upload.wikimedia.org/wikipedia/main.jpg" width="250" height="300"><div class="infobox-caption">Solano in 2020</div></td></tr><tr><th>Born</th><td>Maria Elena Solano (1990)</td></tr></table><p><b>Maria Elena Solano</b>, known professionally as <b>Maya Sol</b>, is a singer and performer with a long career.</p><h2>Performances</h2><p>Sol performed at a festival with a band and several guest musicians.</p><figure><img src="https://upload.wikimedia.org/wikipedia/later.jpg" width="250" height="300"><figcaption>Sol performing in 2021</figcaption></figure><h2>Appearance</h2><p>Her distinctive hairstyle is discussed in this section.</p><figure><img src="https://upload.wikimedia.org/wikipedia/detail.jpg" width="250" height="300"><figcaption>Close-up of Solano</figcaption></figure></div>';
+  const imgs=window.WikiContext.eligible();const first=window.WikiContext.extract(imgs[0],0).context;
+  assert.equal(first.article_kind,'biography');assert.equal(first.subject_name,'Maya Sol');
+  assert(first.subject_aliases.includes('Maria Elena Solano'));assert.equal(first.image_role,'lead');assert(first.lead_subject_association);
+  assert(first.page_summary.includes('festival'));assert(first.section_outline.includes('Appearance'));assert(first.image_overview.includes('Sol performing in 2021'));
+  const later=window.WikiContext.extract(imgs[1],1).context;
+  assert.equal(later.image_role,'contextual');assert.equal(later.image_position,1);assert.equal(later.section_heading,'Performances');
+  const before=JSON.stringify(first);const injected=d.createElement('div');injected.setAttribute('data-wiki-description-control','');injected.textContent='INJECTED-DESCRIPTION';d.querySelector('.infobox-caption').append(injected);
+  assert(!JSON.stringify(window.WikiContext.extract(imgs[0],0).context).includes('INJECTED-DESCRIPTION'));dom.window.close();
+});
+
+test('a country vcard is not misclassified as a person and named caption links are retained',()=>{
+  const {window,dom}=setup();const d=window.document;d.querySelector('.infobox').classList.add('vcard');
+  const figure=d.querySelector('figure');figure.querySelector('figcaption').innerHTML='The <a href="/wiki/Brandenburg_Gate">Brandenburg Gate</a> in Berlin';
+  const context=window.WikiContext.extract(figure.querySelector('img'),0).context;
+  assert.equal(context.article_kind,'general');assert.equal(context.subject_name,null);assert.equal(context.caption_subject,'The Brandenburg Gate');dom.window.close();
+});

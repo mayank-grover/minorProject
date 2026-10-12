@@ -39,7 +39,7 @@ def decode_base64(value):
         raise ProjectError('IMAGE_TOO_LARGE', 'Image exceeds 8 MB.', 413)
     return data
 
-def prepare_image(data):
+def prepare_image(data, max_side=768):
     if len(data) > MAX_BYTES:
         raise ProjectError('IMAGE_TOO_LARGE', 'Image exceeds 8 MB.', 413)
     try:
@@ -53,7 +53,7 @@ def prepare_image(data):
                 image = ImageOps.exif_transpose(original)
                 if image.width * image.height > 20_000_000:
                     raise ProjectError('IMAGE_TOO_LARGE', 'Image exceeds the 20 megapixel decode limit.', 413)
-                image.thumbnail((768, 768), Image.Resampling.LANCZOS)
+                image.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
                 # Composite transparent diagrams over white, rather than turning them black.
                 if image.mode in ('RGBA', 'LA') or 'transparency' in image.info:
                     rgba = image.convert('RGBA')

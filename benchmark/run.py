@@ -11,6 +11,7 @@ from backend.schemas import Context
 from backend.data.images import prepare_image
 from backend.engine.generate import run_generation
 from backend.engine.prompts import build_prompt, PROMPT_VERSION
+from backend.engine.image_types import inspect_image
 
 
 def run(manifest, output, model):
@@ -27,7 +28,8 @@ def run(manifest, output, model):
             image, _, digest, _ = prepare_image(Path(sample['local_image']).read_bytes())
             if digest != sample['image_hash']: raise ValueError(f"Prepared image changed: {sample['sample_id']}")
             for mode in ['image_only', 'context_aware']:
-                prompt = build_prompt(context, mode)
+                analysis = inspect_image(model, image, context, mode)
+                prompt = build_prompt(context, mode, analysis=analysis)
                 prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
                 key = (sample['sample_id'], mode, digest, prompt_hash, fingerprint)
                 if key in done: continue
@@ -39,7 +41,7 @@ def run(manifest, output, model):
                     'platform': platform.platform(), 'created_utc': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
                 start = time.perf_counter()
                 try:
-                    record.update(run_generation(model, image, context, mode)); record['status'] = 'success'
+                    record.update(run_generation(model, image, context, mode, analysis=analysis)); record['status'] = 'success'
                 except Exception as exc:
                     for field in ['raw_output', 'inference_ms', 'tokens', 'finish_reason']:
                         if hasattr(exc, field): record[field] = getattr(exc, field)
