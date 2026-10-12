@@ -1,5 +1,7 @@
 # API 1.0
 
+From prompt ab-4, context-aware `description` begins with an attributed source caption/associated label when available, followed by real model-generated visual prose. `raw_output` in generation records remains the unmodified model response. The 120/250-word validation applies to model prose; the separate source label can add up to the caption's 1200-character bound. Image-only descriptions omit source labels. No named identity is derived from article titles, existing alt or file names alone.
+
 `GET /health` is read-only and returns status (`ok`/`degraded`), model readiness/ID/revision, local processing, busy state, whether auth and extension origin are configured, and a hash of non-secret inference settings.
 
 `POST /describe` and its alias `/v1/descriptions` accept JSON and `Authorization: Bearer <LOCAL_BACKEND_TOKEN>`. Browser Origin must be the configured `chrome-extension://<ID>`; command-line clients may omit Origin but still require the token. No arbitrary prompt/model paths are accepted. FastAPI's `/docs` exposes the actual generated schema.

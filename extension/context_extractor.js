@@ -23,6 +23,27 @@
     });
   };
   const occurrences = new WeakMap();
+  function associatedLabel(img, container) {
+    // Country infoboxes often have separate flag/arms wrappers in the same cell.
+    // Only use a nearby article link in a wrapper containing this image alone.
+    for (let scope = img.parentElement; scope && container.contains(scope); scope = scope.parentElement) {
+      if (scope.querySelectorAll('img').length !== 1) break;
+      const copy = scope.cloneNode(true);
+      copy.querySelectorAll('[data-wiki-description-control]').forEach(node => node.remove());
+      const links = [...copy.querySelectorAll('a[href]')].filter(link => {
+        const url = new URL(link.getAttribute('href'), location.href);
+        return url.origin === location.origin && url.pathname.startsWith('/wiki/') &&
+          !decodeURIComponent(url.pathname.slice(6)).includes(':') && !link.querySelector('img') && clean(link, 300);
+      });
+      if (links.length === 1) {
+        const link = links[0];
+        const title = link.getAttribute('title') || decodeURIComponent(new URL(link.getAttribute('href'), location.href).pathname.slice(6)).replace(/_/g, ' ');
+        return title.replace(/\s+/g, ' ').trim().slice(0, 300);
+      }
+      if (scope === container) break;
+    }
+    return null;
+  }
   function extract(img, index) {
     if (!occurrences.has(img)) occurrences.set(img, crypto.randomUUID());
     const article = root();
@@ -34,10 +55,11 @@
       caption = img.closest('tr')?.querySelector('.infobox-caption');
     }
     let captionText = clean(caption, 1200);
+    if (!captionText) captionText = associatedLabel(img, container);
     if (captionText === null && img.closest('.infobox')) {
       const row = img.closest('tr');
       // Associated text comes only from this image's own row, not other images' rows.
-      const rowText = clean(row, 900);
+      const rowText = row?.querySelectorAll('img').length === 1 ? clean(row, 900) : null;
       if (rowText) {
         const label = clean(row?.previousElementSibling?.querySelector('th'), 250);
         captionText = label ? `${label}: ${rowText}` : rowText;

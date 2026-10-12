@@ -30,10 +30,18 @@ def run_generation(model, image, context, mode, detail='concise'):
     if output.finish_reason == 'length':
         limitations.append('Generation reached its token limit; the description may be incomplete.')
     data = context.model_dump() if hasattr(context, 'model_dump') else dict(context)
+    description = raw
+    if mode == 'context_aware' and (data.get('caption') or '').strip():
+        # Preserve the actual source caption even if the small VLM omits the name.
+        # This is attributed source text, not visual recognition or fixture output.
+        caption = ' '.join(data['caption'].split())
+        ending = '' if caption.endswith(('.', '!', '?')) else '.'
+        description = 'Wikipedia labels this image: ' + caption + ending + ' ' + raw
+        limitations.append('The opening label is taken from Wikipedia; the visual description is AI-generated.')
     actual_context = {} if mode == 'image_only' else {k: v for k, v in data.items() if k != 'existing_alt'}
     if mode == 'context_aware' and (data.get('caption') or '').lower().startswith('conservation status:'):
         actual_context = {'caption': data['caption']}
-    return {'description': raw, 'raw_output': raw, 'prompt': prompt,
+    return {'description': description, 'raw_output': raw, 'prompt': prompt,
             'prompt_version': PROMPT_VERSION, 'prompt_hash': hashlib.sha256(prompt.encode()).hexdigest(),
             'context_hash': hashlib.sha256(json.dumps(actual_context, sort_keys=True).encode()).hexdigest(),
             'inference_ms': output.inference_ms, 'tokens': output.tokens,

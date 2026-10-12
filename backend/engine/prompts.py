@@ -1,6 +1,6 @@
 import json
 
-PROMPT_VERSION = 'ab-3'
+PROMPT_VERSION = 'ab-4'
 COMMON = '''Write a plain-English image description useful to a blind or low-vision reader.
 Help the reader picture this specific image, not just name its subject. For a photograph,
 start with the framing and main subject, then describe visible colors, shapes, textures,
@@ -61,6 +61,8 @@ def build_prompt(context, mode, detail='concise'):
             'Explain what a highlighted category communicates, using associated source text. '
             'Do not describe an unrelated process suggested by the article title. '
             'Use context to select emphasis; do not just repeat the article. '
+            'If the associated caption names the subject, use that exact name before describing its appearance. '
+            'Do not infer a named identity from the article title alone. '
             'For a photograph, spend most of the description on what this particular image looks like: '
             'its framing, colors, shapes, surface textures, patterns, spatial arrangement and background. '
             'Write 3–5 concrete visual sentences. Naming the subject alone is insufficient. '

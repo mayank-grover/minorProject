@@ -1,10 +1,51 @@
 """Start the local backend: python3 run.py (no environment activation needed)."""
 import os
+import errno
+import json
 from pathlib import Path
+import socket
 import sys
+from urllib.request import build_opener, ProxyHandler
+
+
+def check_existing_server():
+    """Return None if the port is free, otherwise a launcher exit code."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.bind(('127.0.0.1', 8000))
+        return None
+    except OSError as error:
+        if error.errno != errno.EADDRINUSE:
+            print('Cannot use local port 8000: ' + str(error), file=sys.stderr)
+            return 1
+
+    try:
+        # Ignore proxy environment variables for this local health check.
+        with build_opener(ProxyHandler({})).open('http://127.0.0.1:8000/health', timeout=3) as response:
+            health = json.load(response)
+        ours = (isinstance(health, dict) and health.get('processing') == 'local'
+                and health.get('schema_version') == '1.0'
+                and health.get('model_id') == 'HuggingFaceTB/SmolVLM2-2.2B-Instruct')
+        if ours:
+            if health.get('model_ready') and health.get('status') == 'ok':
+                print('Wikipedia Image Descriptions is already running and ready.')
+                print('Use the Chrome extension now. No second server is needed.')
+                print('To restart it after code changes, stop its original terminal with Control+C first.')
+                return 0
+            print('The Wikipedia backend is running, but its model is not ready.', file=sys.stderr)
+            print('Check its original terminal for loading progress or errors.', file=sys.stderr)
+            return 1
+    except (OSError, ValueError):
+        pass
+    print('Port 8000 is already occupied by another or unresponsive service.', file=sys.stderr)
+    print('This launcher has not stopped it. Free port 8000 before trying again.', file=sys.stderr)
+    return 1
 
 
 def main():
+    existing = check_existing_server()
+    if existing is not None:
+        return existing
     root = Path(__file__).resolve().parent
     python = root / '.venv' / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')
     if not python.is_file():

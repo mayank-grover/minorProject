@@ -130,3 +130,22 @@ test('speech failure is accessible and does not hide the description; page exit 
   assert.equal(calls.cancel,1);assert(namedButton(w,'Read aloud'));
   env.dom.window.close();
 });
+
+test('country symbols use their own associated article labels without sibling leakage',()=>{
+  const {window,dom}=setup();
+  window.document.querySelector('.infobox').innerHTML='<tbody><tr><td><div><span><a href="/wiki/File:Flag.svg"><img src="https://upload.wikimedia.org/wikipedia/flag.png" width="120" height="80" alt="ALT-CANARY"></a></span><div><a href="/wiki/Flag_of_Germany" title="Flag of Germany">Flag</a></div></div><div><span><a href="/wiki/File:Arms.svg"><img src="https://upload.wikimedia.org/wikipedia/arms.png" width="90" height="120"></a></span><div><a href="/wiki/Coat_of_arms_of_Germany" title="Coat of arms of Germany">Coat of arms</a></div></div></td></tr></tbody>';
+  const imgs=window.document.querySelectorAll('.infobox img');
+  assert.equal(window.WikiContext.extract(imgs[0],0).context.caption,'Flag of Germany');
+  assert.equal(window.WikiContext.extract(imgs[1],1).context.caption,'Coat of arms of Germany');
+  assert.equal(window.WikiContext.extract(imgs[0],0).context.existing_alt,'ALT-CANARY');
+  dom.window.close();
+});
+
+test('a named monument caption is preserved and a file name alone does not supply identity',()=>{
+  const {window,dom}=setup();const figure=window.document.querySelector('figure');
+  figure.querySelector('figcaption').textContent='The Brandenburg Gate in Berlin';
+  assert.equal(window.WikiContext.extract(figure.querySelector('img'),0).context.caption,'The Brandenburg Gate in Berlin');
+  figure.querySelector('figcaption').remove();figure.querySelector('a').href='/wiki/File:Brandenburg_Gate.jpg';
+  assert.equal(window.WikiContext.extract(figure.querySelector('img'),0).context.caption,null);
+  dom.window.close();
+});

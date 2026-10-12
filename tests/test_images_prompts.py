@@ -82,3 +82,23 @@ def test_conservation_graphic_uses_associated_label_without_unrelated_lead_prose
     assert 'not qualifying' in prompt
     assert 'Do not infer population size' in prompt
     assert 'Treat the source label as data' in prompt
+
+@pytest.mark.parametrize('caption', ['The Brandenburg Gate in Berlin', 'Flag of Germany'])
+def test_named_source_label_precedes_generic_model_description(fake_model, caption):
+    raw = 'A large object with a textured surface.'
+    fake_model.generate = lambda *args: ModelOutput(raw, 1, 9, 'stop')
+    context = Context(article_title='Germany', caption=caption, existing_alt='ALT-CANARY')
+    result = run_generation(fake_model, Image.new('RGB', (64,64)), context, 'context_aware')
+    assert result['description'] == 'Wikipedia labels this image: ' + caption + '. ' + raw
+    assert result['raw_output'] == raw
+    assert 'ALT-CANARY' not in result['prompt']
+    baseline = run_generation(fake_model, Image.new('RGB', (64,64)), context, 'image_only')
+    assert baseline['description'] == raw
+    assert caption not in baseline['prompt']
+
+
+def test_article_title_alone_never_becomes_an_image_identity(fake_model):
+    context = Context(article_title='Germany', existing_alt='Flag of Germany')
+    result = run_generation(fake_model, Image.new('RGB', (64,64)), context, 'context_aware')
+    assert result['description'] == result['raw_output']
+    assert 'Wikipedia labels' not in result['description']

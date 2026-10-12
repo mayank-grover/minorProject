@@ -1,5 +1,15 @@
 # Decisions — 11 October 2026
 
+## Identity before appearance — 12 October 2026
+
+The Germany monument screenshot showed an available Brandenburg Gate caption omitted by the model. Prompt ab-4 keeps appearance detail and instructs use of caption-provided names. The generation engine also preserves the associated caption as an attributed opening label, making inclusion independent of model compliance. Visual prose still comes from real inference; no monument/flag description is hardcoded. Read aloud uses the same combined description. Raw model output remains separate in evaluation records.
+
+For infobox symbols, extraction checks the nearest single-image wrapper for one associated Wikipedia article link. This captures Flag of Germany and Coat of arms of Germany separately without using alt, media filenames or sibling-image captions. The existing explicit captions take priority. A multi-image row no longer serves as a shared caption fallback.
+
+24 backend tests and 10 extension tests passed, including label-first monument/flag output with a generic test-model response, image-only isolation, title-only non-identification, and separately associated flag/arms markup. These tests verify name retention and extraction behavior; they do not prove model factuality or every live Wikipedia markup variant.
+
+Live Germany DOM inspection confirmed the separate flag/arms wrappers and the monument's exact caption. A real ab-4 API inference on the article's `Brandenburger_Tor_abends.jpg` image began `Wikipedia labels this image: The Brandenburg Gate in Berlin.` followed by generated visual prose. The response is saved locally in ignored `artifacts/fixes/germany-identity.json`. The model still made questionable architectural details; the source-label guarantee addresses identity omission, not general factual accuracy. The backend is running with ab-4; Chrome must reload the extension and article to get the updated label extractor.
+
 - Empty repository: implemented fresh modules; preserved the supplied PRD unchanged.
 - User's sprint request supersedes PRD's full semester matrix/approval choreography. One VLM, A/B and ten-case pilot are the milestone; C, second model, cache and formal studies are deferred.
 - Apple M2, 16 GB unified RAM: tested official SmolVLM2 using Transformers/MPS, float16, eager attention. No CUDA-only FlashAttention dependency. MPS access requires running outside the restrictive execution sandbox here; normal local terminal commands are documented.
