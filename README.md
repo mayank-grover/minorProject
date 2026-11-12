@@ -6,12 +6,12 @@ See [milestone evidence](docs/report.md), [API contract](docs/contracts.md), [de
 
 ## Installation
 
-Python 3.12 was tested on an Apple M2 MacBook Air with 16 GB RAM. Use Python 3.11 or 3.12 (system macOS Python 3.9 is unsuitable).
+Python 3.12 was tested on an Apple M2 MacBook Air with 16 GB RAM; Python 3.15 also installs with the pinned torch 2.15.0. Use Python 3.11+ (system macOS Python 3.9 is unsuitable).
 
 ```sh
 git clone https://github.com/mayank-grover/minorProject.git
 cd minorProject
-python3.12 -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 python -m pip install -r requirements-models.txt
@@ -59,7 +59,9 @@ Prompt ab-6 uses a bounded article overview (lead, major sections and image capt
 
 Prompt ab-5 adds distinct strategies for photos, flags, charts, maps, processes/lifecycles and other diagrams. **Description style** beside each image defaults to **Automatic**; choose another style and Describe/Refresh if the automatic choice is wrong. Direct associated-caption hints are preferred; otherwise a short local visual classification chooses the style. A style selection changes the description instructions, not the image's identity.
 
-Local Tesseract OCR runs two layout passes on a safely decoded image up to 1600 pixels across; the VLM still receives the 768-pixel prepared image. Up to 16 detected words and normalized positions are supplied as untrusted evidence. Photos emphasize appearance, flags stripe order/emblems, charts readable values/trends, maps spatial relationships/legends, and processes stages/visible connections. OCR can miss or misread words and does not establish arrow directions or chart associations. The model must cross-check the image; dense diagrams remain difficult. In context-aware mode, the prompt uses a bounded article overview and selected-image context; source facts are not evidence that something is visible. The name-first opening, inline results and Read aloud remain available.
+Local Tesseract OCR runs two layout passes on a safely decoded image up to 1600 pixels across; the VLM still receives the 768-pixel prepared image. Up to 24 detected words (confidence ≥ 0.75, containing a digit or two letters) and normalized positions are supplied as untrusted evidence. Photos emphasize appearance, flags stripe order/emblems, charts readable values/trends, maps spatial relationships/legends, and processes stages/visible connections. OCR can miss or misread words and does not establish arrow directions or chart associations. The model must cross-check the image; dense diagrams remain difficult. In context-aware mode, the prompt uses a bounded article overview and selected-image context; source facts are not evidence that something is visible. The name-first opening, inline results and Read aloud remain available.
+
+Version ab-8 keeps the ab-7 prompt and adds two output safeguards. If a context-aware description repeats 12 or more consecutive words of article text, it is regenerated once without the long article text (title and caption stay). An over-long description keeps its whole leading sentences up to the word limit and shows a "Shortened" limitation, instead of returning an error that Retry cannot fix. See `benchmark/results/pilot-ab8/diagnostic.md`.
 
 **Read aloud** beside every completed description starts speech. The button becomes **Stop reading**, and **Pause reading** / **Resume reading** appears during playback. Starting another image's audio stops the previous reading. Refreshing that description, disabling the extension or leaving the page stops its audio. Speech starts only when you click; it reads the description, without model metadata. **Read description** still moves keyboard/screen-reader focus to the text.
 
@@ -101,15 +103,15 @@ The fresh collector stores image bytes under the selected image directory and th
 
 ## Output quality: next steps
 
-- [ ] Restart the backend so it loads prompt `ab-7`; refresh the extension and a Wikipedia article, then inspect a new description.
-- [ ] Run the ab-7 pilot commands above and inspect the generated comparison and failures. Treat this as a development check, not held-out evidence.
-- [ ] Ask two reviewers to independently complete `benchmark/results/pilot/review_reviewer_1.csv` and `review_reviewer_2.csv` against the frozen images and source context. Keep their files separate.
+- [x] Run ab-7 on the pilot as a diagnostic (`benchmark/results/pilot-ab7/`).
+- [x] Run ab-8 (OCR filter, copy retry, shortening) on the pilot and live API (`benchmark/results/pilot-ab8/`).
+- [ ] Ask two reviewers to independently complete the `review_reviewer_1.csv` and `review_reviewer_2.csv` sheets (pilot, pilot-ab7, pilot-ab8) against the frozen images and source context. Keep their files separate.
 - [ ] Collect the fresh Volcano and Bar chart examples into the separate `ab7-fresh` image directory, inspect their licenses and image/context associations, then run ab-7 on them.
 - [ ] Compare reviewer notes by failure tag: generic wording, omitted visual structure, context copying, unsupported claims, attribution, and text/relationship errors. Keep failed generations in the comparison.
 - [ ] Decide whether ab-7 addresses the largest verified failure. If revising, change one target, increment the prompt version, and evaluate that revision on a new set.
 - [ ] Gather a broader fresh set across photos and information graphics before claiming an overall quality improvement.
 
-For exact reproduction on another machine, copy legally permitted prepared PNGs plus the frozen manifest; live rebuilding may capture newer article/file revisions. Local prepared images/HTML are ignored rather than committed unnecessarily.
+For exact reproduction on another machine, run `python -m benchmark.fetch_manifest_images` (default: the pilot manifest). It re-downloads each stored image URL, falls back to the archived Commons version matching the manifest's `file_sha1` if the file was re-uploaded, and writes an image only when its prepared hash matches. Context comes from the manifest, never from a live rebuild. Local prepared images/HTML are ignored rather than committed unnecessarily.
 
 ## Tests
 

@@ -112,3 +112,29 @@ def test_article_title_alone_never_becomes_an_image_identity(fake_model):
     result = run_generation(fake_model, Image.new('RGB', (64,64)), context, 'context_aware')
     assert result['description'] == result['raw_output']
     assert 'Wikipedia labels' not in result['description']
+
+
+def test_verbatim_context_copy_is_retried_once_without_article_prose():
+    from backend.models.smolvlm import ModelOutput
+    lead = 'The Golden Gate Bridge is a suspension bridge spanning the Golden Gate, the one-mile-wide strait connecting San Francisco Bay and the Pacific Ocean.'
+    prompts = []
+    class Copier:
+        def generate(self, image, prompt):
+            prompts.append(prompt)
+            return ModelOutput(lead if len(prompts) == 1 else 'A red suspension bridge crosses blue water.', 2.0, 9, 'stop')
+    analysis = {'image_type':'photo','type_source':'visual','ocr':{'status':'no_text','engine':'test','ms':0,'lines':[]}}
+    context = Context(article_title='Golden Gate Bridge', caption='View from the Presidio', nearby_text=lead)
+    result = run_generation(Copier(), Image.new('RGB',(64,64)), context, 'context_aware', analysis=analysis)
+    assert len(prompts) == 2 and lead in prompts[0] and lead not in prompts[1] and 'Presidio' in prompts[1]
+    assert result['description'].startswith('A red suspension bridge') and result['inference_ms'] == 4.0
+    assert result['repair']['reason'] == 'context_copy' and result['repair']['first_output'] == lead
+    plain = run_generation(Copier(), Image.new('RGB',(64,64)), context, 'image_only', analysis=analysis)
+    assert plain['repair'] is None
+
+
+def test_overlong_output_keeps_whole_leading_sentences(fake_model):
+    sentence = ' '.join(['word'] * 49) + '.'
+    fake_model.generate = lambda *args: ModelOutput(' '.join([sentence] * 3), 1, 150, 'stop')
+    result = run_generation(fake_model, Image.new('RGB',(64,64)), Context(article_title='Test'), 'image_only')
+    assert result['description'] == ' '.join([sentence] * 2) and result['shortened_from_words'] == 147
+    assert any('Shortened' in x for x in result['limitations'])

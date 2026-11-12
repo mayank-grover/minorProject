@@ -2,7 +2,7 @@ import json
 from backend.engine.image_types import GUIDANCE, caption_hint
 from backend.engine.article_context import editorial_context
 
-PROMPT_VERSION = 'ab-7'
+PROMPT_VERSION = 'ab-8'  # ab-7 prompt text + OCR noise filter (24 words) + context-copy retry
 SPECIFICITY_RULE = ('DETAIL CHECK: Beyond naming the topic, include at least two distinct, concrete details '
                     'visible in these pixels, such as appearance, placement, layout, labels or relationships. '
                     'Choose the most informative details. Include only details the image supports; if fewer '

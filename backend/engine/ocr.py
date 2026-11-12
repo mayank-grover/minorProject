@@ -2,6 +2,7 @@
 import csv
 import io
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -55,15 +56,24 @@ class LocalOCR:
                     'ms':(time.perf_counter()-start)*1000, 'message':'Local OCR failed or exceeded its deadline.'}
 
 
+MIN_CONFIDENCE = .75  # pilot: photo/map noise scored .50-.74; real labels mostly >= .77
+
+
+def is_label(text):
+    """Reject Tesseract noise such as '=', 'Lyi,' or 'aN' fragments: need a digit or two letters."""
+    return bool(re.search(r'\d', text)) or len(re.findall(r'[^\W\d_]', text)) >= 2
+
+
 def bound_lines(lines):
     accepted = []
     budget = 1200
     for line in sorted(lines, key=lambda item: (item['box'][1], item['box'][0])):
         text = ' '.join(str(line['text']).split())
         box = line['box']
-        if float(line['confidence']) < .5 or not text or len(box) != 4: continue
+        if float(line['confidence']) < MIN_CONFIDENCE or not is_label(text) or len(box) != 4: continue
         if any(not 0 <= float(value) <= 1 for value in box): continue
-        if len(text) > budget or len(accepted) >= 16: break
+        # 24 words: 16 dropped real labels (e.g. planet names) once a title used the slots.
+        if len(text) > budget or len(accepted) >= 24: break
         accepted.append({'text':text, 'box':[round(float(v),3) for v in box]})
         budget -= len(text)
     return accepted
