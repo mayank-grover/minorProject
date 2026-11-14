@@ -60,3 +60,24 @@ def test_context_focus_and_identity_reach_model_and_hash_but_not_image_only(fake
     baseline=run_generation(fake_model,Image.new('RGB',(64,64)),context,'image_only')
     assert baseline['description']==baseline['raw_output']
     assert 'Maya Sol' not in baseline['prompt'] and 'Solano' not in baseline['prompt']
+
+
+def test_depiction_captions_resolve_but_unrelated_images_in_a_biography_do_not():
+    lovelace = lambda caption: biography(article_title='Ada Lovelace', subject_name='Ada Lovelace',
+        subject_aliases=['The Countess of Lovelace'], caption=caption, image_role='contextual', lead_subject_association=False)
+    assert resolve_subject(lovelace('Painting of Lovelace seated at a piano, by Henry Phillips (1852)'))=='Ada Lovelace'
+    assert resolve_subject(lovelace('Daguerreotype of Lovelace (c. 1843)'))=='Ada Lovelace'
+    assert resolve_subject(lovelace('Lovelace casting a vote'))=='Ada Lovelace'
+    assert resolve_subject(lovelace("Lovelace's notes on the Analytical Engine")) is None
+    assert resolve_subject(lovelace('Naturaleza muerta, 1925')) is None
+
+
+def test_unresolved_subject_is_not_offered_to_the_model(fake_model):
+    context = biography(article_title='Frida Kahlo', subject_name='Frida Kahlo', subject_aliases=['Magdalena Carmen Frida Kahlo'],
+                        caption='Naturaleza muerta, 1925', image_role='contextual', lead_subject_association=False)
+    analysis = {'image_type':'photo','type_source':'visual','ocr':{'status':'no_text','engine':'test','ms':0,'lines':[]}}
+    fake_model.generate = lambda *args: ModelOutput('A blue vase holds pink roses.', 1, 8, 'stop')
+    result = run_generation(fake_model, Image.new('RGB',(64,64)), context, 'context_aware', analysis=analysis)
+    assert result['resolved_subject'] is None and result['description'] == 'A blue vase holds pink roses.'
+    prompt = result['prompt'].split('ARTICLE OVERVIEW')[1]
+    assert 'does not associate a person with this image' in prompt and 'Magdalena' not in prompt and 'Integrate this name' not in prompt

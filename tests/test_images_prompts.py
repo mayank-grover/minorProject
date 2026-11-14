@@ -138,3 +138,11 @@ def test_overlong_output_keeps_whole_leading_sentences(fake_model):
     result = run_generation(fake_model, Image.new('RGB',(64,64)), Context(article_title='Test'), 'image_only')
     assert result['description'] == ' '.join([sentence] * 2) and result['shortened_from_words'] == 147
     assert any('Shortened' in x for x in result['limitations'])
+
+
+def test_token_limit_cut_keeps_complete_sentences_only(fake_model):
+    text = 'A graph titled Fig. 1 has two axes. The points are labeled p1, p2, p3, p4, p5, p6'
+    fake_model.generate = lambda *args: ModelOutput(text, 1, 192, 'length')
+    result = run_generation(fake_model, Image.new('RGB',(64,64)), Context(article_title='Test'), 'image_only')
+    assert result['description'] == 'A graph titled Fig. 1 has two axes.' and result['shortened_from_words'] == len(text.split())
+    assert not any('token limit' in x for x in result['limitations'])

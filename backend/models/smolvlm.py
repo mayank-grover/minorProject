@@ -15,10 +15,12 @@ class ModelOutput:
 class SmolVLM:
     model_id = MODEL_ID
 
-    def __init__(self, revision='main', device='auto', max_new_tokens=192):
+    def __init__(self, revision='main', device='auto', max_new_tokens=192, model_id=MODEL_ID):
         self.revision = revision
         self.device = device
         self.max_new_tokens = max_new_tokens
+        self.model_id = model_id or MODEL_ID
+        self.smol = 'SmolVLM' in self.model_id
         self.ready = False
 
     def load(self):
@@ -26,13 +28,15 @@ class SmolVLM:
         from transformers import AutoProcessor, AutoModelForImageTextToText
         if self.device == 'auto':
             self.device = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
-        self.dtype = torch.float32 if self.device == 'cpu' else torch.float16
+        # Qwen3-VL is trained in bfloat16 and can overflow in float16; SmolVLM keeps its verified fp16.
+        self.dtype = torch.float32 if self.device == 'cpu' else torch.float16 if self.smol else torch.bfloat16
         self.processor = AutoProcessor.from_pretrained(self.model_id, revision=self.revision)
-        self.processor.image_processor.do_image_splitting = True
-        self.processor.image_processor.size = {'longest_edge': 768}
+        if self.smol:
+            self.processor.image_processor.do_image_splitting = True
+            self.processor.image_processor.size = {'longest_edge': 768}
         self.model = AutoModelForImageTextToText.from_pretrained(
             self.model_id, revision=self.revision, dtype=self.dtype,
-            attn_implementation='eager', low_cpu_mem_usage=True,
+            attn_implementation='eager' if self.smol else 'sdpa', low_cpu_mem_usage=True,
         ).to(self.device).eval()
         self.revision = getattr(self.model.config, '_commit_hash', None) or self.revision
         from backend.engine.ocr import LocalOCR
@@ -43,8 +47,9 @@ class SmolVLM:
     def configuration(self):
         return {'model_id': self.model_id, 'revision': self.revision, 'device': self.device,
                 'dtype': str(getattr(self, 'dtype', 'unloaded')), 'do_sample': False,
-                'max_new_tokens': self.max_new_tokens, 'attention': 'eager',
-                'processor': 'official; image splitting enabled; longest_edge=768; patch=384', 'preprocessing': 'rgb-768-v1',
+                'max_new_tokens': self.max_new_tokens, 'attention': 'eager' if self.smol else 'sdpa',
+                'processor': 'official; image splitting enabled; longest_edge=768; patch=384' if self.smol else 'official defaults',
+                'preprocessing': 'rgb-768-v1',
                 'ocr_engine': getattr(getattr(self, 'ocr', None), 'engine', 'unavailable'),
                 'ocr_preprocessing': 'rgb-1600; tesseract-psm11+6; bounded-words-v1', 'image_routing': 'types-v1'}
 

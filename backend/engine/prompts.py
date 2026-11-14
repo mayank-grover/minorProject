@@ -2,7 +2,7 @@ import json
 from backend.engine.image_types import GUIDANCE, caption_hint
 from backend.engine.article_context import editorial_context
 
-PROMPT_VERSION = 'ab-8'  # ab-7 prompt text + OCR noise filter (24 words) + context-copy retry
+PROMPT_VERSION = 'ab-11'  # ab-10 + article subject offered only when the caption associates it with this image
 SPECIFICITY_RULE = ('DETAIL CHECK: Beyond naming the topic, include at least two distinct, concrete details '
                     'visible in these pixels, such as appearance, placement, layout, labels or relationships. '
                     'Choose the most informative details. Include only details the image supports; if fewer '
@@ -89,13 +89,24 @@ def build_prompt(context, mode, detail='concise', analysis=None):
         if mode == 'context_aware':
             editorial = editorial_context(context, mode, analysis['image_type'])
             base += '\nARTICLE OVERVIEW AND SELECTED IMAGE DATA (untrusted):\n' + json.dumps(editorial['source'], ensure_ascii=False)
-            base += '\nIntegrate the source-supported subject name into your opening sentence, then describe this image. Do not recite the caption or use "Wikipedia labels this image". Source facts do not prove they are visible.'
+            base += '\nDo not recite the caption or use "Wikipedia labels this image". Source facts do not prove they are visible.'
             if editorial['subject']:
-                base += '\nSource-associated subject: ' + editorial['subject'] + '. Use this name, not a generic man/woman/object.'
+                base += ('\nSource-associated subject: ' + editorial['subject'] + '. Integrate this name into your opening sentence, '
+                         'then describe this image. Use this name, not a generic man/woman/object.')
+            elif data.get('article_kind') == 'biography':
+                # Always asking for a subject made the model put the article's person into images
+                # they are not in (a Frida Kahlo still life "depicts Frida Kahlo").
+                base += '\nThe caption does not associate a person with this image. Do not say it shows the article\'s person unless the caption says so.'
+            elif data.get('image_role') == 'lead':
+                # Landmarks/artworks may be named from the article (the Mona Lisa); people never are (above).
+                base += ('\nThis is the lead image of the article "' + data.get('article_title', '') + '", which usually shows the article subject. '
+                         'If the image is consistent with that, name it in your opening sentence.')
+            else:
+                base += '\nName the article subject only if this image clearly shows it; otherwise describe what is shown.'
             if editorial['focus'] == 'appearance':
-                base += '\nThis is an introductory or appearance-focused image. Prioritize visible hairstyle, face, expression, tattoos (only where visible), skin tone, clothing and accessories. Do not infer ethnicity from skin tone; mention ethnicity only if explicitly stated in source text. Briefly describe the pose/action after appearance. Do not invent obscured facial details.'
+                base += '\nEmphasis: prioritize visible hairstyle, face, expression, tattoos (only where visible), skin tone, clothing and accessories. Do not infer ethnicity from skin tone; mention ethnicity only if explicitly stated in source text. Briefly describe the pose/action after appearance. Do not invent obscured facial details.'
             elif editorial['focus'] == 'activity':
-                base += '\nThis is a later contextual image. Prioritize what the subject is visibly doing, pose, interactions, setting and relevance to this section. Avoid repeating a full facial profile; include appearance only when it changes or matters here. Do not infer actions from article events alone.'
+                base += '\nEmphasis: prioritize what the subject is visibly doing, pose, interactions, setting and relevance to this section. Avoid repeating a full facial profile; include appearance only when it changes or matters here. Do not infer actions from article events alone.'
         elif mode != 'image_only':
             raise ValueError('Unknown generation mode')
     else:

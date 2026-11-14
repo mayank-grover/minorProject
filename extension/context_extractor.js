@@ -3,7 +3,10 @@
   const clean = (el, max) => {
     if (!el) return null;
     const copy = el.cloneNode(true);
-    copy.querySelectorAll('[data-wiki-description-control]').forEach(node => node.remove());
+    // TemplateStyles put CSS text inside captions/legends; honorifics run into names.
+    copy.querySelectorAll('[data-wiki-description-control],style,script,.honorific-prefix,.honorific-suffix').forEach(node => node.remove());
+    // textContent joins <br> and block elements without spaces ("HonourableThe Countess").
+    copy.querySelectorAll('br,div,p,li,td,th').forEach(node => node.after(' '));
     return copy.textContent.replace(/\[\d+\]/g, '').replace(/\s+/g, ' ').trim().slice(0, max);
   };
   const supported = () => location.hostname === 'en.wikipedia.org' && location.pathname.startsWith('/wiki/') &&
@@ -30,8 +33,11 @@
     const cards = [...article.querySelectorAll('.infobox.vcard')];
     const box = article.querySelector('.infobox.biography') || cards.find(card => [...card.querySelectorAll('th')].some(th => /^(?:Born|Birth name)$/i.test(clean(th,100) || '')));
     const biography = !!box;
-    const subject = biography ? (clean(box.querySelector('.infobox-above,.fn'), 200) || title) : null;
-    const aliases = [...new Set((lead[0] ? [...lead[0].querySelectorAll('b,strong')].map(el => clean(el,100)) : []).filter(Boolean))];
+    // Article titles are the common name by Wikipedia convention ("Ada Lovelace"); the infobox
+    // heading is often formal ("The Countess of Lovelace") and is kept as an alias.
+    const formal = biography ? clean(box.querySelector('.fn') || box.querySelector('.infobox-above'), 200) : null;
+    const subject = biography ? (title.replace(/\s*\([^)]*\)$/, '') || formal) : null;
+    const aliases = [...new Set([formal, ...(lead[0] ? [...lead[0].querySelectorAll('b,strong')].map(el => clean(el,100)) : [])].filter(Boolean))];
     if (box) {
       for (const row of box.querySelectorAll('tr')) {
         const label = clean(row.querySelector('th'), 100) || '';
@@ -101,8 +107,12 @@
     if (caption) {
       const link = caption.querySelector('a[href*="/wiki/"]');
       if (link && !new URL(link.href).pathname.includes(':')) {
-        const prefix = clean(caption,1200).split(clean(link,200))[0].trim();
-        if (/^(?:The|A|An)?$/i.test(prefix)) captionSubject = (prefix ? prefix + ' ' : '') + clean(link,180);
+        const [prefix, ...after] = clean(caption,1200).split(clean(link,200));
+        const rest = after.join(clean(link,200)).trim();
+        // "Maze coral", "Einstein in 1947", "The Brandenburg Gate in Berlin" name the subject;
+        // "Biodiversity in a coral reef" only starts with a link.
+        const namesSubject = !rest || /^[,(;:–—-]/.test(rest) || /^(?:in|at|on|from)\s+[A-Z0-9]/.test(rest) || /^(?:c\.|circa)\s*\d/i.test(rest);
+        if (/^(?:The|A|An)?$/i.test(prefix.trim()) && namesSubject) captionSubject = (prefix.trim() ? prefix.trim() + ' ' : '') + clean(link,180);
       }
     }
     if (!captionText) { captionText = associatedLabel(img, container); captionSubject = captionText; }

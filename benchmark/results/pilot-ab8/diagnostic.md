@@ -53,15 +53,16 @@ Tally (qualitative): better 8, same 7, mixed 5, worse 0. The mixed cases each ga
 ## Extension-path checks
 
 - **OCR at extension resolution.** The API runs OCR on a copy of up to 1600 px built from the original bytes; the pilot thumbnails are 960 px. With the new filter, photo junk drops from 3–12 words per image to 0, apart from `V4` (03) and `ie` (09). The Solar System now passes Mars, Venus, Earth, Mercury, Neptune, Uranus and Ceres; the periodic table adds "Noble gases", "Group" and "Period".
-- **Live API, ab-7 vs ab-8.** Same machine; the requests are built like the extension's, with `page_summary` filled from the lead for 02.
+- **Live API, ab-7 vs ab-8.** Same machine; the requests are built like the extension's, with `page_summary` filled from the lead for 02. Use these for the outputs only, not the timings. Both columns were measured while the 16 GB machine was swapping, and absolute times were about 2.5× inflated.
 
 | Request | ab-7 | ab-8 |
 |---|---|---|
-| 06 image-only | 10.5–11.8 s, 8 words | 12.7–13.9 s, 32 words of accurate detail |
-| 10 context-aware | 24.4 s | 9.1 s |
-| 02 context-aware (lead in `page_summary`) | 26.6 s, verbatim article copy | 14.0 s, visual description |
+| 06 image-only | 8 words | 32 words of accurate detail |
+| 10 context-aware | "Sun at the top", invented legend | fewer errors (see table above) |
+| 02 context-aware (lead in `page_summary`) | verbatim article copy | visual description (copy retry) |
 
-- **Pre-existing, not changed here:** live requests spend 4.5–6 s on analysis (type classification and OCR), and server-side inference is about 2–3× slower than in the benchmark process for the same output. The benchmark's `total_ms` does not include classification or OCR, so benchmark latencies understate what extension users see.
+- **Live latency without memory pressure** (ab-8, OCR running alongside classification): 06 image-only 5.0 s total (1.6 s analysis + 2.8 s inference); 10 image-only 3.8 s; 07 image-only 11.4–12.4 s (long output, then shortened); 10 context-aware 10.1 s; 02 context-aware with copy retry 13.6 s. Running OCR alongside classification cut analysis on 07 from 2.4–2.9 s to 1.3–2.0 s. Do not run a second model process (benchmark, profiling) while the backend is serving; the swapping can triple latency.
+- The benchmark's `total_ms` does not include classification or OCR, because `benchmark/run.py` runs them before timing. Live requests add about 1–2 s.
 - In one live ab-8 run, 10 CA invented image credits ("Cassiopeia", "Lars Lindberg Christensen"). Credits are a remaining hallucination risk.
 
 ## Still open

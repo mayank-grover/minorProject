@@ -57,5 +57,5 @@ def run(manifest, output, model):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(); parser.add_argument('--manifest', default='benchmark/manifests/pilot.jsonl'); parser.add_argument('--output', default='artifacts/runs/pilot.jsonl')
     args = parser.parse_args(); settings = Settings()
-    model = SmolVLM(settings.revision, settings.device, settings.max_tokens); model.load()
+    model = SmolVLM(settings.revision, settings.device, settings.max_tokens, settings.model_id); model.load()
     run(args.manifest, args.output, model)

@@ -9,6 +9,7 @@ class Settings:
     token: str = os.getenv('LOCAL_BACKEND_TOKEN', '')
     extension_id: str = os.getenv('ALLOWED_EXTENSION_ID', '')
     device: str = os.getenv('MODEL_DEVICE', 'auto')
+    model_id: str = os.getenv('MODEL_ID', 'Qwen/Qwen3-VL-2B-Instruct')
     revision: str = os.getenv('MODEL_REVISION', 'main')
     user_agent: str = os.getenv('WIKIMEDIA_USER_AGENT', 'WikiImageAccessibility/0.1 (local student prototype)')
     timeout: float = float(os.getenv('REQUEST_TIMEOUT_SECONDS', '120'))

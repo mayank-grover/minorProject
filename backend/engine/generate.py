@@ -63,6 +63,11 @@ def run_generation(model, image, context, mode, detail='concise', analysis=None,
         else:
             limitations.append('Detected text can be misread; label positions do not prove connections or values.')
     shortened_from = None
+    if output.finish_reason == 'length' and not re.search(r'[.!?]["”’)]?$', raw):
+        # Cut off mid-sentence (often a runaway list such as "p1, p2, … p31"): keep complete sentences.
+        complete = re.match(r'^(.*[.!?]["”’)]?)\s', raw, re.S)
+        if complete:
+            shortened_from, raw = len(raw.split()), complete.group(1)
     if len(raw.split()) > limit:
         # Greedy decoding repeats the same output, so rejecting made Retry useless.
         # Keep whole leading sentences within the limit; reject only if none fit.
@@ -72,11 +77,12 @@ def run_generation(model, image, context, mode, detail='concise', analysis=None,
             kept.append(sentence)
         if not kept:
             reject('OUTPUT_REJECTED', 'Description exceeded the word limit. Try again.')
-        shortened_from, raw = len(raw.split()), ' '.join(kept)
+        shortened_from, raw = shortened_from or len(raw.split()), ' '.join(kept)
+    if shortened_from:
         limitations.append('Shortened to the length limit; later details were left out.')
     if repair and copied_run(raw, context):
         limitations.append('Parts of this description repeat the article text.')
-    if output.finish_reason == 'length':
+    if output.finish_reason == 'length' and not shortened_from:
         limitations.append('Generation reached its token limit; the description may be incomplete.')
     data = context.model_dump() if hasattr(context, 'model_dump') else dict(context)
     editorial = editorial_context(context, mode, analysis['image_type'])

@@ -23,7 +23,7 @@ log = logging.getLogger('wiki_describe')
 
 def create_app(settings=None, model=None):
     settings = settings or Settings()
-    adapter = model or SmolVLM(settings.revision, settings.device, settings.max_tokens)
+    adapter = model or SmolVLM(settings.revision, settings.device, settings.max_tokens, settings.model_id)
     lane = threading.Lock()
     executor = ThreadPoolExecutor(max_workers=1)
 

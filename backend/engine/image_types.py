@@ -1,5 +1,8 @@
 """Conservative routing hints, with visual classification when available."""
 import re
+from concurrent.futures import ThreadPoolExecutor
+
+_ocr_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='ocr')
 
 TYPES = ('photo', 'flag', 'chart', 'map', 'process', 'diagram')
 GUIDANCE = {
@@ -27,6 +30,9 @@ def caption_hint(context, mode):
 def inspect_image(model, image, context, mode, ocr_image=None, requested_type='auto'):
     classifier = getattr(model, 'classify_image', None)
     hint = caption_hint(context, mode)
+    # Tesseract is a subprocess, so it runs alongside the GPU classification (~1 s saved on dense diagrams).
+    ocr = getattr(model, 'ocr', None)
+    pending = _ocr_pool.submit(ocr.extract, ocr_image if ocr_image is not None else image) if ocr else None
     if requested_type in TYPES:
         kind, source = requested_type, 'user'
     elif hint:
@@ -35,7 +41,6 @@ def inspect_image(model, image, context, mode, ocr_image=None, requested_type='a
         visual_type = classifier(image) if classifier else 'photo'
         kind = visual_type if visual_type in TYPES else 'photo'
         source = 'visual' if classifier else 'fallback'
-    ocr = getattr(model, 'ocr', None)
-    text = ocr.extract(ocr_image if ocr_image is not None else image) if ocr else {
+    text = pending.result() if pending else {
         'status':'unavailable', 'engine':'unavailable', 'lines':[], 'ms':0}
     return {'image_type':kind, 'type_source':source, 'ocr':text}

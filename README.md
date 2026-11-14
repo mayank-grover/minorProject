@@ -1,6 +1,6 @@
 # Wikipedia Image Accessibility — mid-semester prototype
 
-A Manifest V3 Chrome extension and local FastAPI service generate real Wikipedia image descriptions with SmolVLM2. Both image-only and context-aware conditions use the same model and prepared pixels. There are no hardcoded production descriptions and no paid API requirement.
+A Manifest V3 Chrome extension and local FastAPI service generate real Wikipedia image descriptions with a local vision-language model: **Qwen3-VL-2B-Instruct** by default since 2026-11-13 (SmolVLM2-2.2B before; see [the evaluation](docs/evaluation_2026-11.md)). Both image-only and context-aware conditions use the same model and prepared pixels. There are no hardcoded production descriptions and no paid API requirement.
 
 See [milestone evidence](docs/report.md), [API contract](docs/contracts.md), [demo walkthrough](docs/demo_script.md), and [team ownership](docs/team.md). The supplied full PRD is preserved in docs/PRD.md; the user's smaller sprint scope governs this prototype.
 
@@ -19,7 +19,7 @@ cp .env.example .env
 python -m scripts.configure
 ```
 
-On this prepared machine `.venv` already exists; activate it directly. `scripts.configure` creates a random local token without printing it; it never overwrites an existing token. Read your local `.env` to copy the token into the extension options. Keep this file private. Model files are in `.cache/huggingface` and are ignored. First download needs about 9 GB; the environment/cache also needs disk space. The default model revision is pinned to the verified revision in docs/report.md for reproduction.
+On this prepared machine `.venv` already exists; activate it directly. `scripts.configure` creates a random local token without printing it; it never overwrites an existing token. Read your local `.env` to copy the token into the extension options. Keep this file private. Model files are in `.cache/huggingface` and are ignored. The default model (`MODEL_ID` / `MODEL_REVISION` in `.env`, pinned) is a 4.3 GB first download; the earlier SmolVLM2 pilot model is about 9 GB and is only needed to reproduce historical runs (set the two lines given in `.env.example`). Running the backend needs about 5 GB of free memory: do not run a benchmark or a second model process at the same time on a 16 GB machine.
 
 ## Load the Chrome extension
 
@@ -61,7 +61,9 @@ Prompt ab-5 adds distinct strategies for photos, flags, charts, maps, processes/
 
 Local Tesseract OCR runs two layout passes on a safely decoded image up to 1600 pixels across; the VLM still receives the 768-pixel prepared image. Up to 24 detected words (confidence ≥ 0.75, containing a digit or two letters) and normalized positions are supplied as untrusted evidence. Photos emphasize appearance, flags stripe order/emblems, charts readable values/trends, maps spatial relationships/legends, and processes stages/visible connections. OCR can miss or misread words and does not establish arrow directions or chart associations. The model must cross-check the image; dense diagrams remain difficult. In context-aware mode, the prompt uses a bounded article overview and selected-image context; source facts are not evidence that something is visible. The name-first opening, inline results and Read aloud remain available.
 
-Version ab-8 keeps the ab-7 prompt and adds two output safeguards. If a context-aware description repeats 12 or more consecutive words of article text, it is regenerated once without the long article text (title and caption stay). An over-long description keeps its whole leading sentences up to the word limit and shows a "Shortened" limitation, instead of returning an error that Retry cannot fix. See `benchmark/results/pilot-ab8/diagnostic.md`.
+The extension sends Wikimedia's standard 960 px thumbnail instead of the ~250 px page thumbnail (animated GIFs excepted), falling back to the displayed image on any failure; small thumbnails made labels unreadable to OCR and the model. After updating the extension code, reload it in `chrome://extensions`.
+
+Version ab-11 (current) names an article's person only when the image's caption associates them with it (captions like "Painting of Lovelace…" count); other images in a biography are described without the person's name. Version ab-10 adds to ab-8: routing fields and other images' captions are no longer shown to the model (it repeated them), and a description cut off at the token limit keeps only complete sentences. Version ab-8 keeps the ab-7 prompt and adds two output safeguards. If a context-aware description repeats 12 or more consecutive words of article text, it is regenerated once without the long article text (title and caption stay). An over-long description keeps its whole leading sentences up to the word limit and shows a "Shortened" limitation, instead of returning an error that Retry cannot fix. See `benchmark/results/pilot-ab8/diagnostic.md`.
 
 **Read aloud** beside every completed description starts speech. The button becomes **Stop reading**, and **Pause reading** / **Resume reading** appears during playback. Starting another image's audio stops the previous reading. Refreshing that description, disabling the extension or leaving the page stops its audio. Speech starts only when you click; it reads the description, without model metadata. **Read description** still moves keyboard/screen-reader focus to the text.
 
@@ -100,6 +102,18 @@ python -m benchmark.analyze --manifest benchmark/manifests/ab7-fresh.jsonl --run
 ```
 
 The fresh collector stores image bytes under the selected image directory and the manifest stores those paths. Review the source licenses and image/context associations before sharing outputs. A two-image run is an initial diagnostic, not a quality claim.
+
+## Live evaluation set (what the extension actually sends)
+
+The 2026-11 evaluation set is built from real article pages with the extension's own extractor, so contexts and image sizes match the product. 28 articles, two occurrences each (first and middle eligible image, chosen by rule), split by article into `dev` and `test` before any run. Keep `test` for final comparisons only.
+
+```sh
+HTML_DIR=artifacts/live/html node benchmark/collect_live.cjs artifacts/live/raw.jsonl $(grep -v '^#' benchmark/manifests/live_articles.txt | cut -d' ' -f1)
+python -m benchmark.freeze_live --raw artifacts/live/raw.jsonl --output benchmark/manifests/live-v2.jsonl
+python -m benchmark.run_api --manifest benchmark/manifests/live-v2.jsonl --split dev --rendition large --output artifacts/runs/live-dev.jsonl
+```
+
+`run_api` loads the configured model and sends each request through the real FastAPI app, exactly as the extension does. Images are stored under `artifacts/live/img` (ignored); licenses and hashes are in the manifest. Results: [docs/evaluation_2026-11.md](docs/evaluation_2026-11.md).
 
 ## Output quality: next steps
 
