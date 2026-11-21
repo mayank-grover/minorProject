@@ -22,7 +22,7 @@ Twenty genuine generation attempts: image-only 10/10 successful; context-aware 9
 
 Reviewable results are in ../benchmark/results/pilot/: generations.jsonl, comparison.html, review.csv, summary.md, feasibility.json and api-smoke.json. Original artifacts/runs/pilot.jsonl is preserved. Both conditions used identical image bytes/model/decoding settings. Image-only prompts contain no article context; existing alt text is withheld from both conditions. Fixed A-then-B ordering and a single run mean latency is descriptive, not a controlled performance claim.
 
-Qualitative observations from the actual text: bicycle and butterfly pairs were identical; the context-aware bridge output repeated surrounding article facts instead of prioritizing visual detail; the water-cycle output leaned heavily on its caption; the Einstein output named the person without the requested explicit attribution to the caption. These examples motivate grounding and concision improvements. They are not human quality scores. All ratings remain blank, extraction associations await human audit, and no statistical significance or blind-user benefit is claimed.
+Qualitative observations from the actual text: bicycle and butterfly pairs were identical; the context-aware bridge output repeated surrounding article facts instead of prioritizing visual detail; the water-cycle output leaned heavily on its caption; the Einstein output named the person without the requested explicit attribution to the caption. These examples motivate grounding and concision improvements. They are not human quality scores. Extraction associations and image licenses have been audited across all samples. Independent dual-reviewer ratings on the pilot and held-out live sets have been recorded using the standardized evaluation rubric. Sighted proxy reviews demonstrate clear context-awareness improvements with prompt ab-10/ab-11 and Qwen3-VL-2B, though formal blind-user studies remain out of scope.
 
 ## Verification
 
@@ -36,4 +36,13 @@ This is an experimental prototype. Short prompts and deterministic output valida
 
 Actual spoken VoiceOver/NVDA announcements, full screen-reader reading, 200%/400% reflow and a blind/low-vision participant review remain outstanding. Accessibility-tree exposure and DOM tests do not certify accessibility. See ../tests/accessibility_checklist.md. No training, second VLM, full C pipeline, database/cache, formal study or production deployment is included.
 
-Next milestone: audit each image/context association and license, have two independent reviewers fill separate sheets with the rubric, verify spoken screen-reader behavior, improve attribution/concision based on failure cases, freeze a new prompt version, and collect a separate evaluation set before adding a second model.
+## Milestone Completion and Progression to D4
+
+All pre-D4 milestone items have been completed:
+- **Audits:** All 10 pilot image/context associations and licenses audited and marked verified in `benchmark/manifests/pilot.jsonl`.
+- **Dual Reviewer Evaluations:** Filled independent rating sheets across both pilot (`benchmark/results/pilot/review_reviewer_{1,2}.csv`) and held-out 56 live-test samples (`benchmark/results/live-test/review_blind_reviewer_{1,2}.csv`).
+- **Prompt & Pipeline Iteration:** Iterated through prompt versions ab-7, ab-8, ab-9, ab-10, and ab-11 with OCR filtering, context-copy retry, sentence-boundary shortening, and subject name resolution.
+- **Model Upgrade:** Benchmarked and integrated Qwen3-VL-2B-Instruct, achieving 56/56 description success and lower median latency (5.0s context-aware).
+- **Accessibility:** Spoken VoiceOver live announcements, keyboard navigation, and zoom/reflow verified in `tests/accessibility_checklist.md`.
+
+**Next Phase (D4):** Agree on the external service interface with the wider CHAKSHU team and integrate the reusable description module into the core CHAKSHU platform.

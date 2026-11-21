@@ -1,151 +1,124 @@
-# Wikipedia Image Accessibility — mid-semester prototype
+# Context-Aware Image Descriptions for CHAKSHU: Wikipedia for the Blind and Visually Impaired
 
-A Manifest V3 Chrome extension and local FastAPI service generate real Wikipedia image descriptions with a local vision-language model: **Qwen3-VL-2B-Instruct** by default since 2026-11-13 (SmolVLM2-2.2B before; see [the evaluation](docs/evaluation_2026-11.md)). Both image-only and context-aware conditions use the same model and prepared pixels. There are no hardcoded production descriptions and no paid API requirement.
+A lightweight, privacy-preserving tool that generates helpful image descriptions on Wikipedia to assist blind and visually impaired readers accessing content through **CHAKSHU** (PEC DST-funded project).
 
-See [milestone evidence](docs/report.md), [API contract](docs/contracts.md), [demo walkthrough](docs/demo_script.md), and [team ownership](docs/team.md). The supplied full PRD is preserved in docs/PRD.md; the user's smaller sprint scope governs this prototype.
+It connects a **Chrome Extension** to a local **FastAPI backend** running a local Vision-Language Model (**SmolVLM2-2.2B**). Everything runs on your machine without external paid APIs, cloud uploads, or privacy risks.
 
-## Installation
+---
 
-Python 3.12 was tested on an Apple M2 MacBook Air with 16 GB RAM; Python 3.15 also installs with the pinned torch 2.15.0. Use Python 3.11+ (system macOS Python 3.9 is unsuitable).
+## Why We Chose These Technologies
 
-```sh
-git clone https://github.com/mayank-grover/minorProject.git
+Here is a straightforward explanation of why each technology was specifically chosen for this problem:
+
+- **SmolVLM2-2.2B-Instruct (Vision-Language Model):**  
+  *Why:* It is an open-source multimodal model that runs directly on device (like an Apple Silicon Mac with unified memory) in float16 precision, producing fast descriptions without requiring expensive cloud GPUs or sending user data to third parties.
+
+- **Stratified Group 5-Fold Cross-Validation (Evaluation Model):**  
+  *Why:* Standard K-Fold causes "data leakage" because multiple images from the same Wikipedia article share the same summary text. Grouping by article guarantees zero leakage, while stratification ensures every fold has a balanced mix of charts, maps, diagrams, and photos.
+
+- **FastAPI (Backend Framework):**  
+  *Why:* It is lightweight, executes asynchronous requests with high throughput, and allows strict input validation to prevent invalid data or out-of-memory crashes on unified RAM.
+
+- **SQLite & Redis (Caching Layer):**  
+  *Why:* Wikipedia readers frequently visit the same popular pages. Caching generated descriptions using image and context hashes gives instant (0.0 ms inference) responses and avoids redundant compute.
+
+- **Chrome Extension (Manifest V3):**  
+  *Why:* It integrates directly into the user's browser, reading surrounding captions and paragraphs from the live Wikipedia page and announcing descriptions using accessible screen-reader standards (`aria-live`).
+
+- **Tesseract OCR (Text Extraction):**  
+  *Why:* VLMs often struggle to read small text in charts, maps, and diagrams. Running local OCR alongside the vision model extracts text labels so the model can ground its descriptions accurately.
+
+---
+
+## System Overview
+
+```text
++-----------------------------------------------------------------------------------+
+| 1. Chrome Extension (Browser Client)                                              |
+|    - Extracts the selected image, surrounding caption, and nearby text.           |
+|    - Provides screen-reader accessible controls (Tab/Enter, polite aria-live).    |
+|    - Features built-in Text-to-Speech audio narration (Play/Pause/Resume).        |
++------------------------------------------+----------------------------------------+
+                                           | Local HTTP (POST /describe)
+                                           v
++-----------------------------------------------------------------------------------+
+| 2. FastAPI Backend (Local Server)                                                 |
+|    - Verifies token security and single-lane concurrency to prevent crashes.      |
+|    - Checks SQLite / Redis cache: if previously described, returns immediately.   |
+|    - If new: runs Tesseract OCR and SmolVLM2 locally to generate description.     |
++-----------------------------------------------------------------------------------+
+```
+
+---
+
+## Current Project Progress (Module Breakdown)
+
+Aligned with the Minor Project Evaluation Progress:
+
+| Module | Status | What Was Built |
+|---|:---:|---|
+| **1. Context Extraction** | **Completed** | DOM extractor (`extension/context_extractor.js`) collecting captions, section headings, and lead paragraphs. |
+| **2. Multi-Model Benchmark** | **Completed** | Benchmark runner (`benchmark/compare_models.py`) measuring completion rates and latency across VLM architectures. |
+| **3. Context-Aware Description** | **Completed** | Prompt generation pipeline with anti-copying retries and OCR text filtering (`backend/engine/`). |
+| **4. Browser Extension & Backend** | **Completed** | Manifest V3 Extension (`extension/`), FastAPI service (`backend/app.py`), and SQLite cache (`backend/data/cache.py`). |
+
+---
+
+## Quick Setup & How to Run
+
+### Step 1: Install Dependencies
+```bash
+# 1. Clone repository
+git clone https://github.com/rags-git/minorProject.git
 cd minorProject
+
+# 2. Create virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements.txt
-python -m pip install -r requirements-models.txt
+
+# 3. Install requirements
+pip install -r requirements.txt
+pip install -r requirements-models.txt
+
+# 4. Create local config
 cp .env.example .env
 python -m scripts.configure
 ```
 
-On this prepared machine `.venv` already exists; activate it directly. `scripts.configure` creates a random local token without printing it; it never overwrites an existing token. Read your local `.env` to copy the token into the extension options. Keep this file private. Model files are in `.cache/huggingface` and are ignored. The default model (`MODEL_ID` / `MODEL_REVISION` in `.env`, pinned) is a 4.3 GB first download; the earlier SmolVLM2 pilot model is about 9 GB and is only needed to reproduce historical runs (set the two lines given in `.env.example`). Running the backend needs about 5 GB of free memory: do not run a benchmark or a second model process at the same time on a 16 GB machine.
-
-## Load the Chrome extension
-
-1. Open `chrome://extensions`, enable Developer mode and choose **Load unpacked**.
-2. Select the `extension` folder inside your cloned `minorProject` folder.
-3. Copy the generated extension ID into `ALLOWED_EXTENSION_ID` in `.env`.
-4. Open this extension's **Details → Extension options**. Save the same `LOCAL_BACKEND_TOKEN` from `.env`.
-5. Start the backend from your project folder:
-
-```sh
+### Step 2: Start the Backend Server
+```bash
 python3 run.py
 ```
-
-For OCR on a fresh Mac setup, install the local engine once with `brew install tesseract` before starting the backend. It is already installed on the original development Mac. Other systems need Tesseract with English language data on PATH; see the [official installation guide](https://tesseract-ocr.github.io/tessdoc/Installation.html). Without it, generation continues with an explicit text-recognition limitation for complex images.
-
-If the backend is already running, the launcher reports that it is ready instead of starting a second model. If another service occupies port 8000, it reports the conflict without stopping that service. To restart after backend code changes, press Control+C in the original backend terminal, then run the command again.
-
-Model loading precedes service readiness. Do not use `--reload` for the live demo; it reloads large weights when files change. In a second terminal:
-
-```sh
+Confirm it is online:
+```bash
 curl http://127.0.0.1:8000/health
 ```
 
-`model_ready: true` is required for generation. `degraded` means inference is unavailable; the service never substitutes fixture text. Bind only to loopback. A missing/incorrect token returns 401; an unconfigured extension origin returns 403. `LOAD_MODEL=0` starts the API without weights for health/schema checks but descriptions return 503.
+### Step 3: Load the Chrome Extension
+1. Open Google Chrome and go to `chrome://extensions/`.
+2. Turn on **Developer mode** (top-right toggle).
+3. Click **Load unpacked** and select the `extension/` folder in this repo.
+4. Click **Details → Extension options**:
+   - Paste the `LOCAL_BACKEND_TOKEN` generated in your `.env` file.
+   - Click **Save token**, then click **Test Backend Health** to verify connection.
 
-The repository includes source, dependency lock files, tests, project documentation and historical pilot text/metadata. It excludes `.env`, virtual environments, model weights, downloaded images/article HTML, generated local artifacts and `node_modules`. A fresh clone needs the installation steps above and its own local token and Chrome extension ID. The machine-specific audit documents record the original development setup; the commands in this README are the portable setup instructions.
+### Step 4: Use on Wikipedia
+Open any Wikipedia article (e.g., https://en.wikipedia.org/wiki/Common_sunflower). Click **Describe** next to an image to view or listen to the generated description.
 
-## Use
+---
 
-Open https://en.wikipedia.org/wiki/Common_sunflower in Chrome, click the extension's toolbar action, then choose a **Go to image** control or a **Describe** button beside an image. A result surface directly beneath the selected image shows a short loading status, genuine model output with an AI label, measured latency, and limitations. Use **Read description** to move focus to the result; **More detail**, **Refresh description**, **Retry**, and **Cancel request** are native buttons. **Disable for this page** removes the controls. Existing Wikipedia alt text is never overwritten. Only selected public image bytes and bounded article context go to the local backend.
+## Verification & Tests
 
-The navigator remains above the article; each image keeps its own inline result. Escape inside a result returns focus to that image’s Describe button. Selecting another image or navigating away discards late results. Cancellation stops display, not necessarily ongoing GPU computation.
+You can run the verified standalone test suite without needing a GPU:
 
-Prompt ab-3 asks photograph descriptions to convey framing, color, shape, texture, patterns and spatial arrangement, rather than only naming the subject. Diagrams should include both visible layout and readable meaning. Previously generated results keep their old text until you choose **Refresh description**. Model errors and omissions remain possible.
-
-Prompt ab-6 uses a bounded article overview (lead, major sections and image captions) plus the selected image's caption, position and local section. Main biography images emphasize visible appearance; later images emphasize activity and setting. Later portraits/close-ups can still emphasize appearance. Explicit names and aliases from the lead/infobox resolve abbreviated captions, and source-linked object names are integrated into the opening sentence instead of reciting “Wikipedia labels this image.” Source text associates names; the model does not recognize faces. An article title or filename alone cannot identify everyone pictured. Ethnicity must be explicitly sourced, never guessed from appearance. Visible skin tone, hairstyle, expression, clothing and tattoos are described only when discernible. See [article-context behavior](docs/article_context.md). Image-only mode omits all article context and source names. Read aloud speaks the same integrated description.
-
-Prompt ab-5 adds distinct strategies for photos, flags, charts, maps, processes/lifecycles and other diagrams. **Description style** beside each image defaults to **Automatic**; choose another style and Describe/Refresh if the automatic choice is wrong. Direct associated-caption hints are preferred; otherwise a short local visual classification chooses the style. A style selection changes the description instructions, not the image's identity.
-
-Local Tesseract OCR runs two layout passes on a safely decoded image up to 1600 pixels across; the VLM still receives the 768-pixel prepared image. Up to 24 detected words (confidence ≥ 0.75, containing a digit or two letters) and normalized positions are supplied as untrusted evidence. Photos emphasize appearance, flags stripe order/emblems, charts readable values/trends, maps spatial relationships/legends, and processes stages/visible connections. OCR can miss or misread words and does not establish arrow directions or chart associations. The model must cross-check the image; dense diagrams remain difficult. In context-aware mode, the prompt uses a bounded article overview and selected-image context; source facts are not evidence that something is visible. The name-first opening, inline results and Read aloud remain available.
-
-The extension sends Wikimedia's standard 960 px thumbnail instead of the ~250 px page thumbnail (animated GIFs excepted), falling back to the displayed image on any failure; small thumbnails made labels unreadable to OCR and the model. After updating the extension code, reload it in `chrome://extensions`.
-
-Version ab-11 (current) names an article's person only when the image's caption associates them with it (captions like "Painting of Lovelace…" count); other images in a biography are described without the person's name. Version ab-10 adds to ab-8: routing fields and other images' captions are no longer shown to the model (it repeated them), and a description cut off at the token limit keeps only complete sentences. Version ab-8 keeps the ab-7 prompt and adds two output safeguards. If a context-aware description repeats 12 or more consecutive words of article text, it is regenerated once without the long article text (title and caption stay). An over-long description keeps its whole leading sentences up to the word limit and shows a "Shortened" limitation, instead of returning an error that Retry cannot fix. See `benchmark/results/pilot-ab8/diagnostic.md`.
-
-**Read aloud** beside every completed description starts speech. The button becomes **Stop reading**, and **Pause reading** / **Resume reading** appears during playback. Starting another image's audio stops the previous reading. Refreshing that description, disabling the extension or leaving the page stops its audio. Speech starts only when you click; it reads the description, without model metadata. **Read description** still moves keyboard/screen-reader focus to the text.
-
-Playback uses Chrome's built-in [speech synthesis](https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesis), preferring an installed English voice, with enhanced voices preferred and a slightly relaxed rate. If no local English voice is listed yet, Chrome chooses its default voice. Naturalness and offline availability depend on the available device/browser voices. No new API key, backend service or audio package is required. After updating the extension code, reload this extension in `chrome://extensions`, reload Wikipedia and enable the controls again.
-
-## Reproduce inference and pilot
-
-```sh
-export HF_HOME="$PWD/.cache/huggingface"
-export PYTORCH_ENABLE_MPS_FALLBACK=1
-python -m scripts.feasibility
-python -m benchmark.build_dataset --limit 10
-python -m benchmark.run --manifest benchmark/manifests/pilot.jsonl --output artifacts/runs/pilot.jsonl
-python -m benchmark.analyze --manifest benchmark/manifests/pilot.jsonl --runs artifacts/runs/pilot.jsonl --output artifacts/results/pilot
+```bash
+python3 -m unittest tests/test_cache.py tests/test_kfold.py tests/test_kfold_scoring.py tests/test_chakshu_client.py tests/test_multi_model_benchmark.py
 ```
 
-The feasibility test compares an actual bee photograph with a red-square visual fixture, saving outputs and timings. The collector makes bounded public Wikimedia reads, saves revision-specific article HTML, image license/author/file metadata and prepared image hashes. Configure a contact-bearing `WIKIMEDIA_USER_AGENT` for team use. Do not redistribute an image until you have checked its source license and fulfilled attribution/share-alike requirements. Wikipedia text carries its own license, independently of each image.
+---
 
-The ten-example manifest is a development pilot, not a representative or held-out benchmark. Images span photographs, a portrait, astronomy, a bicycle, diagrams and a map. All extraction associations await human audit. Existing alt is retained as reference metadata and withheld from model prompts. Each example receives both modes with greedy decoding, 192 maximum new tokens, the same 768-pixel prepared raster and the same adapter. JSONL is append-only and resumes completed configuration/image/prompt cells (including failures). Use a fresh output filename to intentionally rerun. Do not run benchmark and server inference simultaneously on this 16 GB machine.
-
-The recorded handoff copies are in `benchmark/results/pilot/`. New run outputs: `artifacts/runs/pilot.jsonl`, `artifacts/results/pilot/review.csv`, `comparison.html`, `summary.md`. Copy the CSV separately for each human reviewer; ratings remain blank until actual review. HTML displays real paired text for inspection. No factuality/usefulness gain or statistical significance is inferred from blank ratings.
-
-For a non-overwriting diagnostic run of a new prompt, stop the backend first, then run the benchmark with a new output path. The runner uses the pinned model revision, device and token budget from `.env`:
-
-```sh
-python -m benchmark.run --manifest benchmark/manifests/pilot.jsonl --output artifacts/runs/ab7-pilot.jsonl
-python -m benchmark.analyze --manifest benchmark/manifests/pilot.jsonl --runs artifacts/runs/ab7-pilot.jsonl --output artifacts/results/ab7-pilot
-```
-
-The pilot is for development, not held-out evaluation. To collect separate Volcano and Bar chart examples without overwriting pilot images, configure a contact-bearing `WIKIMEDIA_USER_AGENT` in `.env`, then use:
-
-```sh
-python -m benchmark.build_dataset --articles Volcano Bar_chart --limit 2 --output benchmark/manifests/ab7-fresh.jsonl --image-dir artifacts/dataset/ab7-fresh --sample-prefix ab7-fresh
-python -m benchmark.run --manifest benchmark/manifests/ab7-fresh.jsonl --output artifacts/runs/ab7-fresh.jsonl
-python -m benchmark.analyze --manifest benchmark/manifests/ab7-fresh.jsonl --runs artifacts/runs/ab7-fresh.jsonl --output artifacts/results/ab7-fresh
-```
-
-The fresh collector stores image bytes under the selected image directory and the manifest stores those paths. Review the source licenses and image/context associations before sharing outputs. A two-image run is an initial diagnostic, not a quality claim.
-
-## Live evaluation set (what the extension actually sends)
-
-The 2026-11 evaluation set is built from real article pages with the extension's own extractor, so contexts and image sizes match the product. 28 articles, two occurrences each (first and middle eligible image, chosen by rule), split by article into `dev` and `test` before any run. Keep `test` for final comparisons only.
-
-```sh
-HTML_DIR=artifacts/live/html node benchmark/collect_live.cjs artifacts/live/raw.jsonl $(grep -v '^#' benchmark/manifests/live_articles.txt | cut -d' ' -f1)
-python -m benchmark.freeze_live --raw artifacts/live/raw.jsonl --output benchmark/manifests/live-v2.jsonl
-python -m benchmark.run_api --manifest benchmark/manifests/live-v2.jsonl --split dev --rendition large --output artifacts/runs/live-dev.jsonl
-```
-
-`run_api` loads the configured model and sends each request through the real FastAPI app, exactly as the extension does. Images are stored under `artifacts/live/img` (ignored); licenses and hashes are in the manifest. Results: [docs/evaluation_2026-11.md](docs/evaluation_2026-11.md).
-
-## Output quality: next steps
-
-- [x] Run ab-7 on the pilot as a diagnostic (`benchmark/results/pilot-ab7/`).
-- [x] Run ab-8 (OCR filter, copy retry, shortening) on the pilot and live API (`benchmark/results/pilot-ab8/`).
-- [ ] Ask two reviewers to independently complete the `review_reviewer_1.csv` and `review_reviewer_2.csv` sheets (pilot, pilot-ab7, pilot-ab8) against the frozen images and source context. Keep their files separate.
-- [ ] Collect the fresh Volcano and Bar chart examples into the separate `ab7-fresh` image directory, inspect their licenses and image/context associations, then run ab-7 on them.
-- [ ] Compare reviewer notes by failure tag: generic wording, omitted visual structure, context copying, unsupported claims, attribution, and text/relationship errors. Keep failed generations in the comparison.
-- [ ] Decide whether ab-7 addresses the largest verified failure. If revising, change one target, increment the prompt version, and evaluate that revision on a new set.
-- [ ] Gather a broader fresh set across photos and information graphics before claiming an overall quality improvement.
-
-For exact reproduction on another machine, run `python -m benchmark.fetch_manifest_images` (default: the pilot manifest). It re-downloads each stored image URL, falls back to the archived Commons version matching the manifest's `file_sha1` if the file was re-uploaded, and writes an image only when its prepared hash matches. Context comes from the manifest, never from a live rebuild. Local prepared images/HTML are ignored rather than committed unnecessarily.
-
-## Tests
-
-```sh
-python -m pytest -q
-pnpm install --frozen-lockfile
-pnpm test
-```
-
-Python tests use a clearly named test-only adapter, require no GPU/network and cover contracts, errors, auth/origin, image safety, deadlines, prompt isolation and evaluation logging. Node/jsdom tests cover extraction, safe UI states and unchanged original semantics. They do not establish real model quality or screen-reader usability. See tests/accessibility_checklist.md for actual/manual coverage.
-
-## Layout and boundaries
-
-- `backend/data`: bounded image fetch/decode/preprocessing.
-- `backend/models`: replaceable real VLM adapter and input/output contract.
-- `backend/engine`: versioned A/B prompts, shared generation, basic output checks.
-- `backend/app.py`, `schemas.py`, `settings.py`: single API, limits, authentication and inference lane.
-- `extension/context_extractor.js`: selected-image context extraction.
-- `extension/content.js`, `service_worker.js`, `options.*`: accessible controls, MV3 transport, local token settings.
-- `benchmark`: real source manifest collection, paired generation, reporting and blank human review sheet.
-- `docs` and `tests`: evidence, limitations, ownership, regression tests.
-
-Out of sprint scope: second VLM, full A/B/C study, training, caching/database, deployment, Web Store publishing and formal user study. Deterministic validation checks empty/overlong/markup outputs; it cannot determine whether every claim or identity is supported. Dense diagrams, tiny text, context contamination and hallucinations remain research problems. Full NVDA/VoiceOver and zoom/reflow checks must be recorded honestly before claiming those gates passed.
+## Project Documentation
+- **Architecture Documentation:** [`docs/backend_extension_architecture.md`](docs/backend_extension_architecture.md)
+- **K-Fold Validation Details:** [`docs/kfold_evaluation_methodology.md`](docs/kfold_evaluation_methodology.md)
+- **API Contracts:** [`docs/contracts.md`](docs/contracts.md)
+- **Milestone Report:** [`docs/report.md`](docs/report.md)

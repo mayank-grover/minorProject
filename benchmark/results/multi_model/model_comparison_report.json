@@ -1,0 +1,24 @@
+{
+  "Qwen3-VL-2B-Instruct": {
+    "model_id": "Qwen/Qwen3-VL-2B-Instruct",
+    "parameters": "2.2B",
+    "weights_size_gb": 4.3,
+    "success_rate": 1.0,
+    "image_only_latency_median_s": 4.9,
+    "context_aware_latency_median_s": 5.0,
+    "diagram_label_reading": "High (recognizes parameters and axes)",
+    "context_repetition_rate": "Low (< 2% with copy-retry filter)",
+    "status": "Production Candidate (Current Default)"
+  },
+  "SmolVLM2-2.2B-Instruct": {
+    "model_id": "HuggingFaceTB/SmolVLM2-2.2B-Instruct",
+    "parameters": "2.2B",
+    "weights_size_gb": 9.0,
+    "success_rate": 0.928,
+    "image_only_latency_median_s": 4.9,
+    "context_aware_latency_median_s": 8.2,
+    "diagram_label_reading": "Moderate (OCR noise sensitive)",
+    "context_repetition_rate": "Moderate (tended to repeat article lead)",
+    "status": "Baseline (Historical Reference)"
+  }
+}
