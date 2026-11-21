@@ -156,6 +156,7 @@
       result.append(heading, el('p', '', {class: 'description'}), el('p', '', {class: 'metadata'}), el('p', '', {class: 'limitations'}));
       surface.append(status, controls, result);
       const trigger = button(`Describe ${name}`, () => describe(img, WikiContext.eligible().indexOf(img), trigger));
+      trigger.classList.add('primary-describe');
       trigger.setAttribute('aria-controls', resultID);
       wrapper.append(trigger, typeLabel, surface);
       const link = img.closest('a'); (link || img).after(wrapper);
@@ -172,14 +173,42 @@
     window.speechSynthesis?.getVoices(); // Trigger asynchronous voice discovery before first playback.
     panel = el('section', '', {id: 'wiki-description-panel', 'aria-labelledby': 'wiki-description-title'});
     const style = el('style'); style.textContent = `
-      #wiki-description-panel {box-sizing:border-box;background:#fff;color:#17202a;border:2px solid #364c67;padding:16px;margin:16px 0;font:1rem/1.5 sans-serif;overflow-wrap:anywhere;}
-      #wiki-description-panel button,[data-wiki-description-control] button {background:#f1f5fa;color:#17202a;border:1px solid #425c7a;border-radius:4px;padding:8px 12px;margin:4px;white-space:normal;font:inherit;cursor:pointer;}
-      #wiki-description-panel :focus-visible,[data-wiki-description-control] :focus-visible {outline:3px solid #005fcc;outline-offset:3px;}
-      #wiki-description-panel [hidden],[data-wiki-description-control] [hidden] {display:none;}
-      [data-wiki-description-control] {display:block;max-width:100%;box-sizing:border-box;white-space:normal;text-align:left;}
-      .wiki-description-surface {background:#fff;color:#17202a;border:1px solid #425c7a;border-radius:4px;padding:12px;margin:8px 0;overflow-wrap:anywhere;font:1rem/1.5 sans-serif;}
-      .wiki-description-surface h3 {font-size:1.1rem;margin:8px 0;}
-      .wiki-description-surface .metadata,.wiki-description-surface .limitations {font-size:.85rem;}
+      #wiki-description-panel {
+        box-sizing:border-box;background:#f8fafc;color:#0f172a;
+        border:1px solid #cbd5e1;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);
+        padding:20px;margin:20px 0;font:1rem/1.6 system-ui,-apple-system,sans-serif;
+      }
+      #wiki-description-panel h2 {font-size:1.35rem;font-weight:700;color:#1e293b;margin-top:0;display:flex;align-items:center;gap:8px;}
+      #wiki-description-panel button, [data-wiki-description-control] button {
+        background:#ffffff;color:#1e293b;border:1px solid #cbd5e1;border-radius:8px;
+        padding:8px 16px;margin:4px;font-weight:500;font-size:0.92rem;cursor:pointer;
+        box-shadow:0 1px 2px rgba(0,0,0,0.05);transition:all 0.15s ease-in-out;
+      }
+      #wiki-description-panel button:hover, [data-wiki-description-control] button:hover {
+        background:#f1f5f9;border-color:#94a3b8;transform:translateY(-1px);box-shadow:0 2px 4px rgba(0,0,0,0.08);
+      }
+      [data-wiki-description-control] button.primary-describe {
+        background:#2563eb;color:#ffffff;border:none;box-shadow:0 2px 4px rgba(37,99,235,0.25);
+      }
+      [data-wiki-description-control] button.primary-describe:hover {
+        background:#1d4ed8;box-shadow:0 4px 6px rgba(37,99,235,0.35);
+      }
+      #wiki-description-panel :focus-visible, [data-wiki-description-control] :focus-visible {
+        outline:3px solid #3b82f6;outline-offset:2px;
+      }
+      #wiki-description-panel [hidden], [data-wiki-description-control] [hidden] {display:none !important;}
+      [data-wiki-description-control] {display:block;max-width:100%;margin:10px 0;font-family:system-ui,-apple-system,sans-serif;}
+      .wiki-description-surface {
+        background:#ffffff;color:#0f172a;border:1px solid #e2e8f0;border-radius:10px;
+        padding:16px;margin:10px 0;box-shadow:0 10px 15px -3px rgba(0,0,0,0.06);font-size:0.95rem;line-height:1.6;
+        animation: fadeIn 0.25s ease-out;
+      }
+      @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+      .wiki-description-surface h3 {font-size:1.05rem;font-weight:600;color:#0f172a;margin:4px 0 10px 0;}
+      .wiki-description-surface .description {font-size:1rem;color:#334155;margin-bottom:12px;background:#f8fafc;padding:12px;border-radius:8px;border-left:4px solid #3b82f6;}
+      .wiki-description-surface .metadata {font-size:0.82rem;color:#64748b;margin-bottom:6px;}
+      .wiki-description-surface .limitations {font-size:0.82rem;color:#94a3b8;}
+      .wiki-btn-group {display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;}
     `;
     panel.append(style, el('h2', 'Wikipedia image descriptions', {id: 'wiki-description-title', tabindex: '-1'}),
       el('p', 'Experimental AI descriptions. The selected public image and bounded article context are sent to your local backend. Existing captions and alt text remain available.'),
