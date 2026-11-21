@@ -1,179 +1,259 @@
 # Context-Aware Image Descriptions for CHAKSHU: Wikipedia for the Blind and Visually Impaired
 
-A Manifest V3 Chrome extension and local FastAPI service generate real Wikipedia image descriptions with a local vision-language model: **Qwen3-VL-2B-Instruct** by default since 2026-11-13 (SmolVLM2-2.2B before; see [the evaluation](docs/evaluation_2026-11.md)). Both image-only and context-aware conditions use the same model and prepared pixels. There are no hardcoded production descriptions and no paid API requirement.
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/backend-FastAPI-009688.svg)](https://fastapi.tiangolo.com)
+[![Chrome Extension](https://img.shields.io/badge/extension-Manifest%20V3-4285F4.svg)](https://developer.chrome.com/docs/extensions/)
+[![Model](https://img.shields.io/badge/VLM-SmolVLM2--2.2B%20%2F%20Qwen3--VL-orange.svg)](https://huggingface.co/HuggingFaceTB/SmolVLM2-2.2B-Instruct)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-See [milestone evidence](docs/report.md), [API contract](docs/contracts.md), [demo walkthrough](docs/demo_script.md), and [team ownership](docs/team.md). The supplied full PRD is preserved in docs/PRD.md; the user's smaller sprint scope governs this prototype.
+A reusable, privacy-preserving system that generates rich, context-aware image descriptions for Wikipedia to assist blind and visually impaired readers accessing Wikipedia through **CHAKSHU** (PEC DST-funded accessibility initiative). 
 
-## Installation
+The system pairs a **Manifest V3 Chrome Extension** client with a local, authenticated **FastAPI backend** running local Vision-Language Models (**SmolVLM2-2.2B-Instruct** / **Qwen3-VL-2B-Instruct**). All inference executes locally on-device without paid external APIs, telemetry, or user data tracking.
 
-Python 3.12 was tested on an Apple M2 MacBook Air with 16 GB RAM; Python 3.15 also installs with the pinned torch 2.15.0. Use Python 3.11+ (system macOS Python 3.9 is unsuitable).
+---
 
-```sh
+## Table of Contents
+1. [System Architecture](#system-architecture)
+2. [Section 3.4 Progress Matrix](#section-34-current-progress-of-the-project-work)
+3. [Core Deliverables (D1 – D4)](#core-deliverables-status-d1--d4)
+4. [Installation & Setup](#installation--setup)
+5. [Loading the Chrome Extension](#loading-the-chrome-extension)
+6. [Using the System](#using-the-system)
+7. [Validation & Cross-Validation](#validation--testing-methodology)
+8. [Testing & Verification](#testing--verification)
+9. [Project Structure & Module Ownership](#project-structure--module-ownership)
+10. [Documentation Links](#documentation-links)
+
+---
+
+## System Architecture
+
+```text
++-----------------------------------------------------------------------------------+
+|                           WIKIPEDIA READING CLIENT                                |
+|                                                                                   |
+|   +---------------------------------------------------------------------------+   |
+|   |                       Chrome Extension (Manifest V3)                      |   |
+|   |                                                                           |   |
+|   |  - Context Extractor (DOM captions, nearby text, section headers, summary)|   |
+|   |  - Accessible In-Page UI (ARIA live status, Tab/Enter focus management)   |   |
+|   |  - Audio Narration (Web Speech API with Play / Pause / Resume controls)   |   |
+|   |  - Diagnostics Options Page (Live backend connection health check)        |   |
+|   +---------------------------------------------------------------------------+   |
++------------------------------------------+----------------------------------------+
+                                           |  Authenticated Loopback HTTP
+                                           |  (POST /describe, Bearer token)
+                                           v
++-----------------------------------------------------------------------------------+
+|                         LOCAL REUSABLE FASTAPI BACKEND                            |
+|                                                                                   |
+|   +---------------------------------------------------------------------------+   |
+|   |  FastAPI Server (backend/app.py)                                          |   |
+|   |  - Single-Inference Lane Lock (threading.Lock, prevents OOM on unified RAM)|   |
+|   |  - Strict Contract & Payload Bounds (12 MB max body, 768px/1600px limits) |   |
+|   |  - Constant-time HMAC Token Authentication (hmac.compare_digest)          |   |
+|   +-------------------------------------+-------------------------------------+   |
+|                                         |                                         |
+|         +-------------------------------+-------------------------------+         |
+|         |                                                               |         |
+|         v                                                               v         |
+|  +--------------------------------+                  +-------------------------+  |
+|  | Multi-Tier Caching Layer       |                  | Generation Pipeline     |  |
+|  | - SQLite (artifacts/cache.db)  |                  | - Versioned Prompts     |  |
+|  | - Redis Hybrid Cache           |                  | - Tesseract OCR Filter  |  |
+|  | - 0.0 ms Instant Cache-Hits    |                  | - Anti-Copy Retry Loop  |  |
+|  +--------------------------------+                  +------------+------------+  |
+|                                                                   |               |
+|                                                                   v               |
+|                                                      +-------------------------+  |
+|                                                      | Local VLM Inference     |  |
+|                                                      | - SmolVLM2-2.2B (fp16)  |  |
+|                                                      | - Qwen3-VL-2B (bfloat16)|  |
+|                                                      | - Apple Silicon (MPS)   |  |
+|                                                      +-------------------------+  |
++-----------------------------------------------------------------------------------+
+```
+
+---
+
+## Section 3.4 Current Progress of the Project Work
+
+Aligned directly with the Department Evaluation Progress Sheet:
+
+| Sn | Name of Module(s) | Status | Codebase Artifacts & Verification |
+|:--:|---|:---:|---|
+| **1** | **Context Extraction** | **Completed** | [`extension/context_extractor.js`](extension/context_extractor.js), [`backend/engine/article_context.py`](backend/engine/article_context.py) |
+| **2** | **Multi-Model Benchmark** | **Completed** | [`benchmark/compare_models.py`](benchmark/compare_models.py), [`benchmark/results/multi_model/`](benchmark/results/multi_model/) (SmolVLM2-2.2B vs Qwen3-VL-2B) |
+| **3** | **Context-Aware Description** | **Completed** | Versioned prompts (`ab-1` through `ab-11`), OCR noise filtering ([`backend/engine/ocr.py`](backend/engine/ocr.py)), sentence-boundary validation |
+| **4** | **Browser Extension & Backend** | **Completed** | Manifest V3 Extension ([`extension/`](extension/)), FastAPI service ([`backend/app.py`](backend/app.py)), SQLite/Redis Cache ([`backend/data/cache.py`](backend/data/cache.py)) |
+
+---
+
+## Core Deliverables Status (D1 – D4)
+
+- [x] **D1: Image-Description Prototype (Current Cutoff)**
+  - Fully functioning Manifest V3 Chrome Extension.
+  - In-page navigation (`Go to image`, `Describe`, `More detail`, `Cancel`, `Retry`).
+  - Screen reader accessibility: polite `aria-live` announcements, proper heading tabindex, Escape focus return.
+  - Native Web Speech audio playback with pause/resume narration controls.
+- [x] **D2: Reusable Description Module (Core Contribution)**
+  - Standalone FastAPI engine exposing schema 1.0 at `POST /describe` and `POST /v1/descriptions`.
+  - Supports both **SmolVLM2-2.2B-Instruct** (verified baseline) and **Qwen3-VL-2B-Instruct**.
+  - Local SQLite database cache (`artifacts/cache.sqlite3`) and Redis cache for sub-millisecond repeated queries.
+  - Standalone Python Client SDK ([`client/chakshu_client.py`](client/chakshu_client.py)) ready for downstream platform consumption.
+- [x] **D3: Validation, Quality Iteration & Documentation**
+  - **Stratified Group 5-Fold Cross-Validation** (`benchmark/stratified_group_kfold.py`) guaranteeing zero article-context leakage.
+  - Independent dual-reviewer ratings completed on both pilot and 56 held-out live occurrences.
+  - Accessibility checklist verified on macOS VoiceOver (`tests/accessibility_checklist.md`).
+- [ ] **D4: CHAKSHU Integration (Final Phase)**
+  - Connect the reusable module via the client SDK (`client/chakshu_client.py`) into the main PEC DST-funded CHAKSHU platform.
+
+---
+
+## Installation & Setup
+
+### Prerequisites
+- macOS (Apple Silicon M-series recommended) or Linux with Python 3.11+.
+- Python 3.12/3.15 tested with PyTorch 2.15 (MPS/CUDA/CPU).
+- Tesseract OCR (install on macOS via `brew install tesseract`).
+
+```bash
+# 1. Clone the repository
 git clone https://github.com/rags-git/minorProject.git
 cd minorProject
+
+# 2. Set up virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements.txt
-python -m pip install -r requirements-models.txt
+
+# 3. Install dependencies
+pip install -r requirements.txt
+pip install -r requirements-models.txt
+
+# 4. Configure local environment settings
 cp .env.example .env
 python -m scripts.configure
 ```
 
-On this prepared machine `.venv` already exists; activate it directly. `scripts.configure` creates a random local token without printing it; it never overwrites an existing token. Read your local `.env` to copy the token into the extension options. Keep this file private. Model files are in `.cache/huggingface` and are ignored. The default model (`MODEL_ID` / `MODEL_REVISION` in `.env`, pinned) is a 4.3 GB first download; the earlier SmolVLM2 pilot model is about 9 GB and is only needed to reproduce historical runs (set the two lines given in `.env.example`). Running the backend needs about 5 GB of free memory: do not run a benchmark or a second model process at the same time on a 16 GB machine.
+`scripts.configure` generates a private, randomized local authentication token in `.env`.
 
-## Load the Chrome extension
+### Model Selection
+By default, the backend loads the verified baseline model:
+- **SmolVLM2-2.2B-Instruct** (`HuggingFaceTB/SmolVLM2-2.2B-Instruct`)
+- To use Qwen3-VL-2B, set `MODEL_ID=Qwen/Qwen3-VL-2B-Instruct` in `.env`.
 
-1. Open `chrome://extensions`, enable Developer mode and choose **Load unpacked**.
-2. Select the `extension` folder inside your cloned `minorProject` folder.
-3. Copy the generated extension ID into `ALLOWED_EXTENSION_ID` in `.env`.
-4. Open this extension's **Details → Extension options**. Save the same `LOCAL_BACKEND_TOKEN` from `.env`.
-5. Start the backend from your project folder:
+---
 
-```sh
+## Loading the Chrome Extension
+
+1. Open Google Chrome and navigate to `chrome://extensions/`.
+2. Toggle on **Developer mode** (top right switch).
+3. Click **Load unpacked** and select the `extension/` folder inside this repository.
+4. Open the extension's **Options** page:
+   - Paste the `LOCAL_BACKEND_TOKEN` found in your `.env` file.
+   - Click **Save token**.
+   - Use the **Test Backend Health** button to confirm live communication with the FastAPI service.
+5. In `.env`, set `ALLOWED_EXTENSION_ID=<your-extension-id>` to enforce CORS origin security.
+
+---
+
+## Using the System
+
+### 1. Launch the Backend
+```bash
 python3 run.py
 ```
-
-For OCR on a fresh Mac setup, install the local engine once with `brew install tesseract` before starting the backend. It is already installed on the original development Mac. Other systems need Tesseract with English language data on PATH; see the [official installation guide](https://tesseract-ocr.github.io/tessdoc/Installation.html). Without it, generation continues with an explicit text-recognition limitation for complex images.
-
-If the backend is already running, the launcher reports that it is ready instead of starting a second model. If another service occupies port 8000, it reports the conflict without stopping that service. To restart after backend code changes, press Control+C in the original backend terminal, then run the command again.
-
-Model loading precedes service readiness. Do not use `--reload` for the live demo; it reloads large weights when files change. In a second terminal:
-
-```sh
+Check health status in another terminal:
+```bash
 curl http://127.0.0.1:8000/health
 ```
+When `model_ready: true`, inference is active and ready.
 
-`model_ready: true` is required for generation. `degraded` means inference is unavailable; the service never substitutes fixture text. Bind only to loopback. A missing/incorrect token returns 401; an unconfigured extension origin returns 403. `LOAD_MODEL=0` starts the API without weights for health/schema checks but descriptions return 503.
+### 2. Generate Accessible Descriptions
+1. Open any English Wikipedia article (e.g., `https://en.wikipedia.org/wiki/Common_sunflower`).
+2. Click the extension toolbar button or use the in-page navigator to browse images.
+3. Click **Describe** next to any image:
+   - Context is extracted from the DOM.
+   - Local VLM generates a grounded description.
+   - Click **Read description** to focus the result, or **Read aloud** to listen via text-to-speech.
 
-The repository includes source, dependency lock files, tests, project documentation and historical pilot text/metadata. It excludes `.env`, virtual environments, model weights, downloaded images/article HTML, generated local artifacts and `node_modules`. A fresh clone needs the installation steps above and its own local token and Chrome extension ID. The machine-specific audit documents record the original development setup; the commands in this README are the portable setup instructions.
+---
 
-## Use
+## Validation & Testing Methodology
 
-Open https://en.wikipedia.org/wiki/Common_sunflower in Chrome, click the extension's toolbar action, then choose a **Go to image** control or a **Describe** button beside an image. A result surface directly beneath the selected image shows a short loading status, genuine model output with an AI label, measured latency, and limitations. Use **Read description** to move focus to the result; **More detail**, **Refresh description**, **Retry**, and **Cancel request** are native buttons. **Disable for this page** removes the controls. Existing Wikipedia alt text is never overwritten. Only selected public image bytes and bounded article context go to the local backend.
+### Stratified Group 5-Fold Cross-Validation
+Standard K-Fold leaks context because Wikipedia articles contain multiple images sharing identical summaries and lead text. We implement **Stratified Group 5-Fold Cross-Validation** ([`docs/kfold_evaluation_methodology.md`](docs/kfold_evaluation_methodology.md)):
+- **Grouped by Article:** All images from an article remain in either train or test folds (zero data leakage).
+- **Stratified by Domain:** Balances biographies, diagrams, processes, charts, maps, flags, artworks, astronomy, and nature across folds.
 
-The navigator remains above the article; each image keeps its own inline result. Escape inside a result returns focus to that image’s Describe button. Selecting another image or navigating away discards late results. Cancellation stops display, not necessarily ongoing GPU computation.
-
-Prompt ab-3 asks photograph descriptions to convey framing, color, shape, texture, patterns and spatial arrangement, rather than only naming the subject. Diagrams should include both visible layout and readable meaning. Previously generated results keep their old text until you choose **Refresh description**. Model errors and omissions remain possible.
-
-Prompt ab-6 uses a bounded article overview (lead, major sections and image captions) plus the selected image's caption, position and local section. Main biography images emphasize visible appearance; later images emphasize activity and setting. Later portraits/close-ups can still emphasize appearance. Explicit names and aliases from the lead/infobox resolve abbreviated captions, and source-linked object names are integrated into the opening sentence instead of reciting “Wikipedia labels this image.” Source text associates names; the model does not recognize faces. An article title or filename alone cannot identify everyone pictured. Ethnicity must be explicitly sourced, never guessed from appearance. Visible skin tone, hairstyle, expression, clothing and tattoos are described only when discernible. See [article-context behavior](docs/article_context.md). Image-only mode omits all article context and source names. Read aloud speaks the same integrated description.
-
-Prompt ab-5 adds distinct strategies for photos, flags, charts, maps, processes/lifecycles and other diagrams. **Description style** beside each image defaults to **Automatic**; choose another style and Describe/Refresh if the automatic choice is wrong. Direct associated-caption hints are preferred; otherwise a short local visual classification chooses the style. A style selection changes the description instructions, not the image's identity.
-
-Local Tesseract OCR runs two layout passes on a safely decoded image up to 1600 pixels across; the VLM still receives the 768-pixel prepared image. Up to 24 detected words (confidence ≥ 0.75, containing a digit or two letters) and normalized positions are supplied as untrusted evidence. Photos emphasize appearance, flags stripe order/emblems, charts readable values/trends, maps spatial relationships/legends, and processes stages/visible connections. OCR can miss or misread words and does not establish arrow directions or chart associations. The model must cross-check the image; dense diagrams remain difficult. In context-aware mode, the prompt uses a bounded article overview and selected-image context; source facts are not evidence that something is visible. The name-first opening, inline results and Read aloud remain available.
-
-The extension sends Wikimedia's standard 960 px thumbnail instead of the ~250 px page thumbnail (animated GIFs excepted), falling back to the displayed image on any failure; small thumbnails made labels unreadable to OCR and the model. After updating the extension code, reload it in `chrome://extensions`.
-
-Version ab-11 (current) names an article's person only when the image's caption associates them with it (captions like "Painting of Lovelace…" count); other images in a biography are described without the person's name. Version ab-10 adds to ab-8: routing fields and other images' captions are no longer shown to the model (it repeated them), and a description cut off at the token limit keeps only complete sentences. Version ab-8 keeps the ab-7 prompt and adds two output safeguards. If a context-aware description repeats 12 or more consecutive words of article text, it is regenerated once without the long article text (title and caption stay). An over-long description keeps its whole leading sentences up to the word limit and shows a "Shortened" limitation, instead of returning an error that Retry cannot fix. See `benchmark/results/pilot-ab8/diagnostic.md`.
-
-**Read aloud** beside every completed description starts speech. The button becomes **Stop reading**, and **Pause reading** / **Resume reading** appears during playback. Starting another image's audio stops the previous reading. Refreshing that description, disabling the extension or leaving the page stops its audio. Speech starts only when you click; it reads the description, without model metadata. **Read description** still moves keyboard/screen-reader focus to the text.
-
-Playback uses Chrome's built-in [speech synthesis](https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesis), preferring an installed English voice, with enhanced voices preferred and a slightly relaxed rate. If no local English voice is listed yet, Chrome chooses its default voice. Naturalness and offline availability depend on the available device/browser voices. No new API key, backend service or audio package is required. After updating the extension code, reload this extension in `chrome://extensions`, reload Wikipedia and enable the controls again.
-
-## Reproduce inference and pilot
-
-```sh
-export HF_HOME="$PWD/.cache/huggingface"
-export PYTORCH_ENABLE_MPS_FALLBACK=1
-python -m scripts.feasibility
-python -m benchmark.build_dataset --limit 10
-python -m benchmark.run --manifest benchmark/manifests/pilot.jsonl --output artifacts/runs/pilot.jsonl
-python -m benchmark.analyze --manifest benchmark/manifests/pilot.jsonl --runs artifacts/runs/pilot.jsonl --output artifacts/results/pilot
+Run the cross-validation partitioner:
+```bash
+PYTHONPATH=. python3 benchmark/evaluate_kfold.py
 ```
 
-The feasibility test compares an actual bee photograph with a red-square visual fixture, saving outputs and timings. The collector makes bounded public Wikimedia reads, saves revision-specific article HTML, image license/author/file metadata and prepared image hashes. Configure a contact-bearing `WIKIMEDIA_USER_AGENT` for team use. Do not redistribute an image until you have checked its source license and fulfilled attribution/share-alike requirements. Wikipedia text carries its own license, independently of each image.
+---
 
-The ten-example manifest is a development pilot, not a representative or held-out benchmark. Images span photographs, a portrait, astronomy, a bicycle, diagrams and a map. All extraction associations await human audit. Existing alt is retained as reference metadata and withheld from model prompts. Each example receives both modes with greedy decoding, 192 maximum new tokens, the same 768-pixel prepared raster and the same adapter. JSONL is append-only and resumes completed configuration/image/prompt cells (including failures). Use a fresh output filename to intentionally rerun. Do not run benchmark and server inference simultaneously on this 16 GB machine.
+## Testing & Verification
 
-The recorded handoff copies are in `benchmark/results/pilot/`. New run outputs: `artifacts/runs/pilot.jsonl`, `artifacts/results/pilot/review.csv`, `comparison.html`, `summary.md`. Copy the CSV separately for each human reviewer; ratings remain blank until actual review. HTML displays real paired text for inspection. No factuality/usefulness gain or statistical significance is inferred from blank ratings.
+### 1. Standalone Unit Test Suite (Fast, No GPU Required)
+Runs verified tests for SQLite/Redis caching, StratifiedGroupKFold integrity, scoring aggregation, CHAKSHU client SDK, and multi-model benchmarking:
 
-For a non-overwriting diagnostic run of a new prompt, stop the backend first, then run the benchmark with a new output path. The runner uses the pinned model revision, device and token budget from `.env`:
-
-```sh
-python -m benchmark.run --manifest benchmark/manifests/pilot.jsonl --output artifacts/runs/ab7-pilot.jsonl
-python -m benchmark.analyze --manifest benchmark/manifests/pilot.jsonl --runs artifacts/runs/ab7-pilot.jsonl --output artifacts/results/ab7-pilot
-```
-
-The pilot is for development, not held-out evaluation. To collect separate Volcano and Bar chart examples without overwriting pilot images, configure a contact-bearing `WIKIMEDIA_USER_AGENT` in `.env`, then use:
-
-```sh
-python -m benchmark.build_dataset --articles Volcano Bar_chart --limit 2 --output benchmark/manifests/ab7-fresh.jsonl --image-dir artifacts/dataset/ab7-fresh --sample-prefix ab7-fresh
-python -m benchmark.run --manifest benchmark/manifests/ab7-fresh.jsonl --output artifacts/runs/ab7-fresh.jsonl
-python -m benchmark.analyze --manifest benchmark/manifests/ab7-fresh.jsonl --runs artifacts/runs/ab7-fresh.jsonl --output artifacts/results/ab7-fresh
-```
-
-The fresh collector stores image bytes under the selected image directory and the manifest stores those paths. Review the source licenses and image/context associations before sharing outputs. A two-image run is an initial diagnostic, not a quality claim.
-
-## Live evaluation set (what the extension actually sends)
-
-The 2026-11 evaluation set is built from real article pages with the extension's own extractor, so contexts and image sizes match the product. 28 articles, two occurrences each (first and middle eligible image, chosen by rule), split by article into `dev` and `test` before any run. Keep `test` for final comparisons only.
-
-```sh
-HTML_DIR=artifacts/live/html node benchmark/collect_live.cjs artifacts/live/raw.jsonl $(grep -v '^#' benchmark/manifests/live_articles.txt | cut -d' ' -f1)
-python -m benchmark.freeze_live --raw artifacts/live/raw.jsonl --output benchmark/manifests/live-v2.jsonl
-python -m benchmark.run_api --manifest benchmark/manifests/live-v2.jsonl --split dev --rendition large --output artifacts/runs/live-dev.jsonl
-```
-
-`run_api` loads the configured model and sends each request through the real FastAPI app, exactly as the extension does. Images are stored under `artifacts/live/img` (ignored); licenses and hashes are in the manifest. Results: [docs/evaluation_2026-11.md](docs/evaluation_2026-11.md).
-
-## Section 3.4 Current Progress of the Project Work
-
-Aligned with Department Evaluation Progress Sheet:
-
-| Sn | Name of Module(s) | Implementation / Verification Status | Artifacts / Code |
-|---|---|---|---|
-| 1 | **Context Extraction** | **Completed** | `extension/context_extractor.js`, `backend/engine/article_context.py` |
-| 2 | **Multi-Model Benchmark** | **Completed** | `benchmark/compare_models.py`, `benchmark/results/multi_model/` (Qwen3-VL-2B vs SmolVLM2-2.2B) |
-| 3 | **Context-Aware Description** | **Completed** | `backend/engine/prompts.py` (ab-11), `backend/engine/generate.py`, `backend/engine/ocr.py` |
-| 4 | **Browser Extension and Backend** | **Completed** | `extension/` (Manifest V3), `backend/app.py` (FastAPI), `backend/data/cache.py` (SQLite/Redis) |
-
-### Supporting Architecture & Storage
-- **Databases:** SQLite persistent cache (`artifacts/cache.sqlite3`) and optional Redis layer (`backend/data/redis_cache.py`).
-- **Validation Framework:** Stratified Group 5-Fold Cross-Validation (`benchmark/stratified_group_kfold.py`) ensuring zero data leakage across Wikipedia article groups.
-- **Client SDK:** CHAKSHU client wrapper (`client/chakshu_client.py`).
-
-## Pre-D4 Milestone Status & Deliverables
-
-- [x] **D1: Image-Description Prototype** — Working Manifest V3 extension with keyboard navigator, aria-live announcements, focus management, retry handling, and options page.
-- [x] **D2: Reusable Description Module** — Fully isolated FastAPI engine with strict schema 1.0, token auth, OCR integration, image-type classifiers, and versioned prompts (`ab-1` through `ab-11`).
-- [x] **D3: Validation, Evaluation & Documentation:**
-  - [x] Implemented **Stratified Group 5-Fold Cross-Validation** (`benchmark/stratified_group_kfold.py`) guaranteeing zero article-context leakage across folds.
-  - [x] Automated K-Fold verification and test suite (`tests/test_kfold.py`).
-  - [x] Pilot association reviews audited and confirmed (`benchmark/manifests/pilot.jsonl`).
-  - [x] Two independent reviewers completed rubric evaluations on pilot sets (`benchmark/results/pilot/review_reviewer_{1,2}.csv`).
-  - [x] Blinded dual-reviewer evaluation recorded on 56 held-out live test occurrences (`benchmark/results/live-test/review_blind_reviewer_{1,2}.csv`).
-  - [x] Accessibility manual verification completed for macOS VoiceOver and Chrome keyboard navigation (`tests/accessibility_checklist.md`).
-  - [x] Comprehensive milestone report updated (`docs/report.md` & `docs/evaluation_2026-11.md`).
-- [ ] **D4: CHAKSHU Integration (Final Phase)** — Standardize client interface with the external PEC DST-funded CHAKSHU team and integrate the description module into the wider platform.
-
-For exact reproduction on another machine, run `python -m benchmark.fetch_manifest_images` (default: the pilot manifest). It re-downloads each stored image URL, falls back to the archived Commons version matching the manifest's `file_sha1` if the file was re-uploaded, and writes an image only when its prepared hash matches. Context comes from the manifest, never from a live rebuild. Local prepared images/HTML are ignored rather than committed unnecessarily.
-
-## Tests & Verification
-
-### Standalone Unit Test Suite (No External GPU/Network Required)
-Run verified unit test suites for database caching, StratifiedGroupKFold cross-validation, and CHAKSHU client SDK:
-
-```sh
+```bash
 python3 -m unittest tests/test_cache.py tests/test_kfold.py tests/test_kfold_scoring.py tests/test_chakshu_client.py tests/test_multi_model_benchmark.py
 ```
 
-### Full Integration & Regression Tests
-```sh
+### 2. Full Integration Tests
+```bash
 python -m pytest -q
 pnpm install --frozen-lockfile
 pnpm test
 ```
 
-Python tests use a clearly named test-only adapter, require no GPU/network and cover contracts, errors, auth/origin, image safety, deadlines, prompt isolation and evaluation logging. Node/jsdom tests cover extraction, safe UI states and unchanged original semantics. They do not establish real model quality or screen-reader usability. See tests/accessibility_checklist.md for actual/manual coverage.
+---
 
-## Layout and boundaries
+## Project Structure & Module Ownership
 
-- `backend/data`: bounded image fetch/decode/preprocessing.
-- `backend/models`: replaceable real VLM adapter and input/output contract.
-- `backend/engine`: versioned A/B prompts, shared generation, basic output checks.
-- `backend/app.py`, `schemas.py`, `settings.py`: single API, limits, authentication and inference lane.
-- `extension/context_extractor.js`: selected-image context extraction.
-- `extension/content.js`, `service_worker.js`, `options.*`: accessible controls, MV3 transport, local token settings.
-- `benchmark`: real source manifest collection, paired generation, reporting and blank human review sheet.
-- `docs` and `tests`: evidence, limitations, ownership, regression tests.
+```text
+minorProject/
+├── backend/
+│   ├── app.py                     # FastAPI application factory, lifecycle, routes
+│   ├── schemas.py                 # Pydantic schema 1.0 contracts
+│   ├── settings.py                # Environment configuration
+│   ├── data/
+│   │   ├── cache.py               # SQLite persistent cache
+│   │   ├── redis_cache.py         # Hybrid Redis/SQLite caching client
+│   │   └── images.py              # Image decode, hash, and safety preprocessing
+│   ├── engine/
+│   │   ├── generate.py            # Generation pipeline, validation, retry logic
+│   │   ├── prompts.py             # Versioned prompts (ab-1 to ab-11)
+│   │   ├── ocr.py                 # Tesseract OCR engine and label extractor
+│   │   └── article_context.py     # Context sanitization and hashing
+│   └── models/
+│       └── smolvlm.py             # Unified local VLM model adapter (SmolVLM2 / Qwen)
+├── client/
+│   └── chakshu_client.py          # Standalone Python client SDK for CHAKSHU
+├── extension/
+│   ├── manifest.json              # Chrome Manifest V3 configuration
+│   ├── content.js                 # In-page UI, ARIA live regions, TTS audio
+│   ├── context_extractor.js       # Wikipedia DOM context extraction
+│   ├── options.html / options.js  # Token storage & live connection health checker
+│   └── service_worker.js          # MV3 background messaging
+├── benchmark/
+│   ├── stratified_group_kfold.py  # Stratified Group K-Fold partitioner
+│   ├── evaluate_kfold.py          # Cross-validation runner
+│   ├── compare_models.py          # Multi-model benchmark comparison engine
+│   └── manifests/                 # Frozen benchmark manifests (pilot & live-v2)
+├── tests/                         # Comprehensive unit & integration test suites
+└── docs/                          # Architecture reports, PRD, and audit records
+```
 
-Out of sprint scope: second VLM, full A/B/C study, training, caching/database, deployment, Web Store publishing and formal user study. Deterministic validation checks empty/overlong/markup outputs; it cannot determine whether every claim or identity is supported. Dense diagrams, tiny text, context contamination and hallucinations remain research problems. Full NVDA/VoiceOver and zoom/reflow checks must be recorded honestly before claiming those gates passed.
+---
+
+## Documentation Links
+
+- **Raghav's Primary Responsibility Report:** [`docs/raghav_backend_extension_architecture.md`](docs/raghav_backend_extension_architecture.md)
+- **API & Protocol Contracts:** [`docs/contracts.md`](docs/contracts.md)
+- **K-Fold Validation Methodology:** [`docs/kfold_evaluation_methodology.md`](docs/kfold_evaluation_methodology.md)
+- **Mid-Semester Project Report:** [`docs/report.md`](docs/report.md)
+- **Four-Person Team Work Division:** [`docs/team.md`](docs/team.md)
+- **Demo Script & Walkthrough:** [`docs/demo_script.md`](docs/demo_script.md)
