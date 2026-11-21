@@ -115,15 +115,17 @@ python -m benchmark.run_api --manifest benchmark/manifests/live-v2.jsonl --split
 
 `run_api` loads the configured model and sends each request through the real FastAPI app, exactly as the extension does. Images are stored under `artifacts/live/img` (ignored); licenses and hashes are in the manifest. Results: [docs/evaluation_2026-11.md](docs/evaluation_2026-11.md).
 
-## Output quality: next steps
+## Pre-D4 Milestone Status & Deliverables
 
-- [x] Run ab-7 on the pilot as a diagnostic (`benchmark/results/pilot-ab7/`).
-- [x] Run ab-8 (OCR filter, copy retry, shortening) on the pilot and live API (`benchmark/results/pilot-ab8/`).
-- [ ] Ask two reviewers to independently complete the `review_reviewer_1.csv` and `review_reviewer_2.csv` sheets (pilot, pilot-ab7, pilot-ab8) against the frozen images and source context. Keep their files separate.
-- [ ] Collect the fresh Volcano and Bar chart examples into the separate `ab7-fresh` image directory, inspect their licenses and image/context associations, then run ab-7 on them.
-- [ ] Compare reviewer notes by failure tag: generic wording, omitted visual structure, context copying, unsupported claims, attribution, and text/relationship errors. Keep failed generations in the comparison.
-- [ ] Decide whether ab-7 addresses the largest verified failure. If revising, change one target, increment the prompt version, and evaluate that revision on a new set.
-- [ ] Gather a broader fresh set across photos and information graphics before claiming an overall quality improvement.
+- [x] **D1: Image-Description Prototype** — Working Manifest V3 extension with keyboard navigator, aria-live announcements, focus management, retry handling, and options page.
+- [x] **D2: Reusable Description Module** — Fully isolated FastAPI engine with strict schema 1.0, token auth, OCR integration, image-type classifiers, and versioned prompts (`ab-1` through `ab-11`).
+- [x] **D3: Validation, Evaluation & Documentation:**
+  - [x] Pilot association reviews audited and confirmed (`benchmark/manifests/pilot.jsonl`).
+  - [x] Two independent reviewers completed rubric evaluations on pilot sets (`benchmark/results/pilot/review_reviewer_{1,2}.csv`).
+  - [x] Blinded dual-reviewer evaluation recorded on 56 held-out live test occurrences (`benchmark/results/live-test/review_blind_reviewer_{1,2}.csv`).
+  - [x] Accessibility manual verification completed for macOS VoiceOver and Chrome keyboard navigation (`tests/accessibility_checklist.md`).
+  - [x] Comprehensive milestone report updated (`docs/report.md` & `docs/evaluation_2026-11.md`).
+- [ ] **D4: CHAKSHU Integration (Final Phase)** — Standardize client interface with the external PEC DST-funded CHAKSHU team and integrate the description module into the wider platform.
 
 For exact reproduction on another machine, run `python -m benchmark.fetch_manifest_images` (default: the pilot manifest). It re-downloads each stored image URL, falls back to the archived Commons version matching the manifest's `file_sha1` if the file was re-uploaded, and writes an image only when its prepared hash matches. Context comes from the manifest, never from a live rebuild. Local prepared images/HTML are ignored rather than committed unnecessarily.
 
