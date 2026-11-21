@@ -120,6 +120,8 @@ python -m benchmark.run_api --manifest benchmark/manifests/live-v2.jsonl --split
 - [x] **D1: Image-Description Prototype** — Working Manifest V3 extension with keyboard navigator, aria-live announcements, focus management, retry handling, and options page.
 - [x] **D2: Reusable Description Module** — Fully isolated FastAPI engine with strict schema 1.0, token auth, OCR integration, image-type classifiers, and versioned prompts (`ab-1` through `ab-11`).
 - [x] **D3: Validation, Evaluation & Documentation:**
+  - [x] Implemented **Stratified Group 5-Fold Cross-Validation** (`benchmark/stratified_group_kfold.py`) guaranteeing zero article-context leakage across folds.
+  - [x] Automated K-Fold verification and test suite (`tests/test_kfold.py`).
   - [x] Pilot association reviews audited and confirmed (`benchmark/manifests/pilot.jsonl`).
   - [x] Two independent reviewers completed rubric evaluations on pilot sets (`benchmark/results/pilot/review_reviewer_{1,2}.csv`).
   - [x] Blinded dual-reviewer evaluation recorded on 56 held-out live test occurrences (`benchmark/results/live-test/review_blind_reviewer_{1,2}.csv`).
