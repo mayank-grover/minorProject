@@ -18,12 +18,14 @@ from backend.models.smolvlm import SmolVLM
 from backend.data.images import fetch_image, decode_base64, prepare_image
 from backend.engine.generate import run_generation
 from backend.errors import ProjectError
+from backend.data.redis_cache import HybridDescriptionCache
 
 log = logging.getLogger('wiki_describe')
 
 def create_app(settings=None, model=None):
     settings = settings or Settings()
     adapter = model or SmolVLM(settings.revision, settings.device, settings.max_tokens, settings.model_id)
+    cache = HybridDescriptionCache()
     lane = threading.Lock()
     executor = ThreadPoolExecutor(max_workers=1)
 
@@ -91,6 +93,23 @@ def create_app(settings=None, model=None):
         try:
             data = decode_base64(payload.image_base64) if payload.image_base64 else fetch_image(payload.image_url, settings.user_agent)
             image, _, digest, animated = prepare_image(data)
+            
+            # Check fast persistent cache (SQLite / Redis)
+            from backend.engine.article_context import hash_context
+            ctx_hash = hash_context(payload.context, payload.mode)
+            cached_entry = cache.get(digest, ctx_hash, payload.mode, payload.detail)
+            if cached_entry:
+                meta = cached_entry["metadata"]
+                log.info('request=%s status=cached source=%s', payload.request_id, cached_entry.get("source", "sqlite"))
+                return DescribeResponse(
+                    request_id=payload.request_id, occurrence_id=payload.occurrence_id,
+                    description=cached_entry["description"], mode=payload.mode, detail=payload.detail,
+                    model_id=meta.get("model_id", adapter.model_id), model_revision=meta.get("model_revision", adapter.revision),
+                    prompt_version=meta.get("prompt_version", "ab-11"), inference_ms=0.0,
+                    total_ms=(time.perf_counter() - start) * 1000, image_hash=digest,
+                    context_hash=ctx_hash, limitations=meta.get("limitations", []) + [f"Result retrieved from local {cached_entry.get('source', 'sqlite')} cache."],
+                    image_type=meta.get("image_type", payload.image_type), ocr_status=meta.get("ocr_status", "cached"), analysis_ms=0.0
+                )
             ocr_image = prepare_image(data, max_side=1600)[0] if getattr(adapter, 'ocr', None) else image
             result = run_generation(adapter, image, payload.context, payload.mode, payload.detail,
                                     ocr_image=ocr_image, requested_type=payload.image_type)
@@ -103,6 +122,15 @@ def create_app(settings=None, model=None):
                 inference_ms=result['inference_ms'], total_ms=(time.perf_counter()-start)*1000,
                 image_hash=digest, context_hash=result['context_hash'], limitations=limitations,
                 image_type=result['image_type'], ocr_status=result['ocr_status'], analysis_ms=result['analysis_ms'])
+            # Persist successful response in cache
+            cache.put(digest, result['context_hash'], payload.mode, payload.detail, result['description'], {
+                "model_id": adapter.model_id,
+                "model_revision": adapter.revision,
+                "prompt_version": result['prompt_version'],
+                "limitations": limitations,
+                "image_type": result['image_type'],
+                "ocr_status": result['ocr_status']
+            })
             log.info('request=%s status=ok inference_ms=%.1f', payload.request_id, response.inference_ms)
             return response
         finally:
