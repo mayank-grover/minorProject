@@ -1,6 +1,6 @@
-# Primary Responsibility: Extension and FastAPI Backend (Raghav Bhardwaj, SID 24106017)
+# Extension and FastAPI Backend Architecture
 
-This document provides complete technical evidence and architectural documentation for **Extension, FastAPI Backend, and Data Caching** as submitted on the PEC Minor Project Verification Table (Part B).
+This document provides complete technical evidence and architectural documentation for the **Extension, FastAPI Backend, and Data Caching** modules of the CHAKSHU image accessibility system.
 
 ---
 

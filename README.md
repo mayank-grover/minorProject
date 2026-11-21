@@ -252,7 +252,7 @@ minorProject/
 
 ## Documentation Links
 
-- **Raghav's Primary Responsibility Report:** [`docs/raghav_backend_extension_architecture.md`](docs/raghav_backend_extension_architecture.md)
+- **Extension & FastAPI Backend Architecture:** [`docs/backend_extension_architecture.md`](docs/backend_extension_architecture.md)
 - **API & Protocol Contracts:** [`docs/contracts.md`](docs/contracts.md)
 - **K-Fold Validation Methodology:** [`docs/kfold_evaluation_methodology.md`](docs/kfold_evaluation_methodology.md)
 - **Mid-Semester Project Report:** [`docs/report.md`](docs/report.md)
