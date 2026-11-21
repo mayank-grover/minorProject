@@ -115,6 +115,22 @@ python -m benchmark.run_api --manifest benchmark/manifests/live-v2.jsonl --split
 
 `run_api` loads the configured model and sends each request through the real FastAPI app, exactly as the extension does. Images are stored under `artifacts/live/img` (ignored); licenses and hashes are in the manifest. Results: [docs/evaluation_2026-11.md](docs/evaluation_2026-11.md).
 
+## Section 3.4 Current Progress of the Project Work
+
+Aligned with Department Evaluation Progress Sheet:
+
+| Sn | Name of Module(s) | Implementation / Verification Status | Artifacts / Code |
+|---|---|---|---|
+| 1 | **Context Extraction** | **Completed** | `extension/context_extractor.js`, `backend/engine/article_context.py` |
+| 2 | **Multi-Model Benchmark** | **Completed** | `benchmark/compare_models.py`, `benchmark/results/multi_model/` (Qwen3-VL-2B vs SmolVLM2-2.2B) |
+| 3 | **Context-Aware Description** | **Completed** | `backend/engine/prompts.py` (ab-11), `backend/engine/generate.py`, `backend/engine/ocr.py` |
+| 4 | **Browser Extension and Backend** | **Completed** | `extension/` (Manifest V3), `backend/app.py` (FastAPI), `backend/data/cache.py` (SQLite/Redis) |
+
+### Supporting Architecture & Storage
+- **Databases:** SQLite persistent cache (`artifacts/cache.sqlite3`) and optional Redis layer (`backend/data/redis_cache.py`).
+- **Validation Framework:** Stratified Group 5-Fold Cross-Validation (`benchmark/stratified_group_kfold.py`) ensuring zero data leakage across Wikipedia article groups.
+- **Client SDK:** CHAKSHU client wrapper (`client/chakshu_client.py`).
+
 ## Pre-D4 Milestone Status & Deliverables
 
 - [x] **D1: Image-Description Prototype** — Working Manifest V3 extension with keyboard navigator, aria-live announcements, focus management, retry handling, and options page.
