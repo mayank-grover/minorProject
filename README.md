@@ -3,12 +3,12 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/backend-FastAPI-009688.svg)](https://fastapi.tiangolo.com)
 [![Chrome Extension](https://img.shields.io/badge/extension-Manifest%20V3-4285F4.svg)](https://developer.chrome.com/docs/extensions/)
-[![Model](https://img.shields.io/badge/VLM-SmolVLM2--2.2B%20%2F%20Qwen3--VL-orange.svg)](https://huggingface.co/HuggingFaceTB/SmolVLM2-2.2B-Instruct)
+[![Model](https://img.shields.io/badge/VLM-SmolVLM2--2.2B--Instruct-orange.svg)](https://huggingface.co/HuggingFaceTB/SmolVLM2-2.2B-Instruct)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 A reusable, privacy-preserving system that generates rich, context-aware image descriptions for Wikipedia to assist blind and visually impaired readers accessing Wikipedia through **CHAKSHU** (PEC DST-funded accessibility initiative). 
 
-The system pairs a **Manifest V3 Chrome Extension** client with a local, authenticated **FastAPI backend** running local Vision-Language Models (**SmolVLM2-2.2B-Instruct** / **Qwen3-VL-2B-Instruct**). All inference executes locally on-device without paid external APIs, telemetry, or user data tracking.
+The system pairs a **Manifest V3 Chrome Extension** client with a local, authenticated **FastAPI backend** running local Vision-Language Model (**SmolVLM2-2.2B-Instruct**). All inference executes locally on-device without paid external APIs, telemetry, or user data tracking.
 
 ---
 
@@ -68,8 +68,8 @@ The system pairs a **Manifest V3 Chrome Extension** client with a local, authent
 |                                                      +-------------------------+  |
 |                                                      | Local VLM Inference     |  |
 |                                                      | - SmolVLM2-2.2B (fp16)  |  |
-|                                                      | - Qwen3-VL-2B (bfloat16)|  |
 |                                                      | - Apple Silicon (MPS)   |  |
+|                                                      | - 768px Patch Splitting |  |
 |                                                      +-------------------------+  |
 +-----------------------------------------------------------------------------------+
 ```
@@ -98,7 +98,7 @@ Aligned directly with the Department Evaluation Progress Sheet:
   - Native Web Speech audio playback with pause/resume narration controls.
 - [x] **D2: Reusable Description Module (Core Contribution)**
   - Standalone FastAPI engine exposing schema 1.0 at `POST /describe` and `POST /v1/descriptions`.
-  - Supports both **SmolVLM2-2.2B-Instruct** (verified baseline) and **Qwen3-VL-2B-Instruct**.
+  - Powered by **SmolVLM2-2.2B-Instruct** (`HuggingFaceTB/SmolVLM2-2.2B-Instruct`) running locally in float16 precision.
   - Local SQLite database cache (`artifacts/cache.sqlite3`) and Redis cache for sub-millisecond repeated queries.
   - Standalone Python Client SDK ([`client/chakshu_client.py`](client/chakshu_client.py)) ready for downstream platform consumption.
 - [x] **D3: Validation, Quality Iteration & Documentation**
@@ -137,10 +137,11 @@ python -m scripts.configure
 
 `scripts.configure` generates a private, randomized local authentication token in `.env`.
 
-### Model Selection
-By default, the backend loads the verified baseline model:
-- **SmolVLM2-2.2B-Instruct** (`HuggingFaceTB/SmolVLM2-2.2B-Instruct`)
-- To use Qwen3-VL-2B, set `MODEL_ID=Qwen/Qwen3-VL-2B-Instruct` in `.env`.
+### Vision-Language Model
+The project runs **SmolVLM2-2.2B-Instruct** (`HuggingFaceTB/SmolVLM2-2.2B-Instruct`, revision `482adb53...`) as its single vision-language model. 
+- Fully open-source under Apache-2.0.
+- Executed locally via PyTorch with Metal Performance Shaders (`mps`) acceleration on Apple Silicon.
+- Uses aspect-preserving image preparation bounded to a maximum 768-pixel longest edge.
 
 ---
 
