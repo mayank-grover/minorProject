@@ -1,4 +1,4 @@
-# Wikipedia Image Accessibility — mid-semester prototype
+# Context-Aware Image Descriptions for CHAKSHU: Wikipedia for the Blind and Visually Impaired
 
 A Manifest V3 Chrome extension and local FastAPI service generate real Wikipedia image descriptions with a local vision-language model: **Qwen3-VL-2B-Instruct** by default since 2026-11-13 (SmolVLM2-2.2B before; see [the evaluation](docs/evaluation_2026-11.md)). Both image-only and context-aware conditions use the same model and prepared pixels. There are no hardcoded production descriptions and no paid API requirement.
 
@@ -9,7 +9,7 @@ See [milestone evidence](docs/report.md), [API contract](docs/contracts.md), [de
 Python 3.12 was tested on an Apple M2 MacBook Air with 16 GB RAM; Python 3.15 also installs with the pinned torch 2.15.0. Use Python 3.11+ (system macOS Python 3.9 is unsuitable).
 
 ```sh
-git clone https://github.com/mayank-grover/minorProject.git
+git clone https://github.com/rags-git/minorProject.git
 cd minorProject
 python3 -m venv .venv
 source .venv/bin/activate
@@ -147,8 +147,16 @@ Aligned with Department Evaluation Progress Sheet:
 
 For exact reproduction on another machine, run `python -m benchmark.fetch_manifest_images` (default: the pilot manifest). It re-downloads each stored image URL, falls back to the archived Commons version matching the manifest's `file_sha1` if the file was re-uploaded, and writes an image only when its prepared hash matches. Context comes from the manifest, never from a live rebuild. Local prepared images/HTML are ignored rather than committed unnecessarily.
 
-## Tests
+## Tests & Verification
 
+### Standalone Unit Test Suite (No External GPU/Network Required)
+Run verified unit test suites for database caching, StratifiedGroupKFold cross-validation, and CHAKSHU client SDK:
+
+```sh
+python3 -m unittest tests/test_cache.py tests/test_kfold.py tests/test_kfold_scoring.py tests/test_chakshu_client.py tests/test_multi_model_benchmark.py
+```
+
+### Full Integration & Regression Tests
 ```sh
 python -m pytest -q
 pnpm install --frozen-lockfile
