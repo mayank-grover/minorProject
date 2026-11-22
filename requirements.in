@@ -2,6 +2,7 @@ fastapi
 uvicorn
 pydantic
 httpx
+httpx2
 Pillow
 beautifulsoup4
 python-dotenv

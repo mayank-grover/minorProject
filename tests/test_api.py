@@ -2,7 +2,7 @@ import os
 import time
 import tempfile
 import uuid
-from fastapi.testclient import TestClient
+from starlette.testclient import TestClient
 from backend.app import create_app
 from backend.settings import Settings
 from backend.errors import ProjectError
