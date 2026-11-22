@@ -25,7 +25,7 @@ def check_existing_server():
             health = json.load(response)
         ours = (isinstance(health, dict) and health.get('processing') == 'local'
                 and health.get('schema_version') == '1.0'
-                and health.get('model_id') == 'HuggingFaceTB/SmolVLM2-2.2B-Instruct')
+                and 'configuration_fingerprint' in health and isinstance(health.get('model_id'), str))
         if ours:
             if health.get('model_ready') and health.get('status') == 'ok':
                 print('Wikipedia Image Descriptions is already running and ready.')

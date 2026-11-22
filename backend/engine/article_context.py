@@ -1,9 +1,22 @@
 """Choose editorial emphasis and resolve only explicitly source-associated names."""
 import re
+import hashlib
+import json
 
 
 def data_of(context):
     return context.model_dump() if hasattr(context, 'model_dump') else dict(context)
+
+
+def hash_context(context, mode, image_type='auto'):
+    """Stable fingerprint for the context actually used to generate a description."""
+    editorial = editorial_context(context, mode, image_type)
+    data = data_of(context)
+    used = editorial['source']
+    if mode == 'context_aware' and (data.get('caption') or '').lower().startswith('conservation status:'):
+        used = {'caption': data['caption']}
+    encoded = json.dumps(used, sort_keys=True)
+    return hashlib.sha256(encoded.encode('utf-8')).hexdigest()
 
 
 def resolve_subject(context):
@@ -20,7 +33,13 @@ def resolve_subject(context):
             # in the same surname (e.g. "Another Smith").
             words = re.findall(r"[\w'-]+", alias)
             words = [w for w in words if w.lower().rstrip('.') not in ('jr','sr','ii','iii','iv')]
-            if len(words) >= 2 and re.match(re.escape(words[-1]) + r'(?:\s+(?:in|at|on|during|performing|speaking|pictured)\b|$)', caption, re.I):
+            surname = re.escape(words[-1]) if len(words) >= 2 else None
+            # "Mandela casting his vote", "Kahlo with her parrots", "Kahlo in 1932".
+            if surname and re.match(surname + r'(?:\s+(?:in|at|on|with|during|pictured|\w+ing)\b|$)', caption, re.I):
+                return name
+            # "Painting of Lovelace seated…", "Daguerreotype of Lovelace" — but not "Lovelace's notes".
+            if surname and re.search(r'\b(?:portrait|painting|photograph|photo|daguerreotype|drawing|sketch|bust|statue|engraving)\s+of\s+'
+                                     + surname + r"(?!['’]s)(?!\w)", caption, re.I):
                 return name
         if data.get('image_role') == 'lead' and data.get('lead_subject_association') and not caption:
             return name
@@ -38,9 +57,14 @@ def resolve_subject(context):
 def editorial_context(context, mode, image_type):
     if mode != 'context_aware': return {'focus':'visual', 'subject':None, 'source':{}}
     data = data_of(context)
-    source = {k:data.get(k) for k in ('article_title','article_kind','page_summary','section_outline',
-              'image_overview','subject_name','subject_aliases','caption','caption_subject',
-              'section_heading','image_position','image_role','lead_subject_association') if data.get(k) is not None}
+    # Routing fields (article_kind, image_role, image_position, lead_subject_association) steer
+    # the code below, not the model: shown to it, they were echoed ("a 'general' article").
+    # image_overview (other images' captions) is also withheld: the model attributed them to this
+    # image (dev: a tectonic-plate map "includes a paleomap drawn by Wegener").
+    # subject_name/aliases are article-level: they resolve the subject below; only a resolved,
+    # caption-associated subject reaches the prompt.
+    source = {k:data.get(k) for k in ('article_title','page_summary','section_outline',
+              'caption','caption_subject','section_heading') if data.get(k) is not None}
     # Selected-section context is more useful for later images than the lead.
     if data.get('image_role') != 'lead' and data.get('nearby_text'):
         source['nearby_text'] = data['nearby_text'][:800]

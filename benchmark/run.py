@@ -13,6 +13,9 @@ from backend.data.images import prepare_image
 from backend.engine.generate import run_generation
 from backend.engine.prompts import build_prompt, PROMPT_VERSION
 from backend.engine.image_types import inspect_image
+from importlib.metadata import version
+
+RUNTIME = {'python': platform.python_version(), **{p: version(p) for p in ['torch', 'transformers', 'pillow']}}
 
 
 def run(manifest, output, model):
@@ -39,7 +42,7 @@ def run(manifest, output, model):
                     'configuration': config, 'config_hash': fingerprint, 'image_hash': digest,
                     'prompt_version': PROMPT_VERSION, 'prompt_hash': prompt_hash, 'prompt': prompt,
                     'description': None, 'error': None, 'inference_ms': None,
-                    'platform': platform.platform(), 'created_utc': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
+                    'platform': platform.platform(), 'runtime': RUNTIME, 'created_utc': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
                 start = time.perf_counter()
                 try:
                     record.update(run_generation(model, image, context, mode, analysis=analysis)); record['status'] = 'success'
@@ -54,5 +57,5 @@ def run(manifest, output, model):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(); parser.add_argument('--manifest', default='benchmark/manifests/pilot.jsonl'); parser.add_argument('--output', default='artifacts/runs/pilot.jsonl')
     args = parser.parse_args(); settings = Settings()
-    model = SmolVLM(settings.revision, settings.device, settings.max_tokens); model.load()
+    model = SmolVLM(settings.revision, settings.device, settings.max_tokens, settings.model_id); model.load()
     run(args.manifest, args.output, model)

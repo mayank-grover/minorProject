@@ -21,7 +21,7 @@ def occupied(monkeypatch, health):
 
 def test_ready_backend_does_not_launch_a_second_model(monkeypatch, capsys):
     occupied(monkeypatch, {'processing':'local', 'schema_version':'1.0',
-                          'model_id':'HuggingFaceTB/SmolVLM2-2.2B-Instruct',
+                          'model_id':'HuggingFaceTB/SmolVLM2-2.2B-Instruct', 'configuration_fingerprint':'abc',
                           'model_ready':True, 'status':'ok'})
     def forbidden(*args): raise AssertionError('Must not launch a second server')
     monkeypatch.setattr(run.os, 'execve', forbidden)
@@ -37,7 +37,7 @@ def test_unrelated_service_is_not_treated_as_ready(monkeypatch, capsys):
 
 def test_degraded_backend_reports_model_problem(monkeypatch, capsys):
     occupied(monkeypatch, {'processing':'local', 'schema_version':'1.0',
-                          'model_id':'HuggingFaceTB/SmolVLM2-2.2B-Instruct',
+                          'model_id':'HuggingFaceTB/SmolVLM2-2.2B-Instruct', 'configuration_fingerprint':'abc',
                           'model_ready':False, 'status':'degraded'})
     assert run.check_existing_server() == 1
     assert 'model is not ready' in capsys.readouterr().err
@@ -46,3 +46,9 @@ def test_degraded_backend_reports_model_problem(monkeypatch, capsys):
 def test_free_port_allows_normal_startup(monkeypatch):
     monkeypatch.setattr(run.socket, 'socket', lambda *args: PortProbe(False))
     assert run.check_existing_server() is None
+
+
+def test_backend_running_another_configured_model_is_recognised(monkeypatch, capsys):
+    occupied(monkeypatch, {'processing':'local', 'schema_version':'1.0', 'configuration_fingerprint':'abc',
+                          'model_id':'Qwen/Qwen3-VL-2B-Instruct', 'model_ready':True, 'status':'ok'})
+    assert run.check_existing_server() == 0

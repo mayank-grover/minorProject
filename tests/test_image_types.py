@@ -38,7 +38,9 @@ def test_ocr_limits_filters_and_preserves_top_left_positions():
     assert [l['text'] for l in result]==['Seed','Seedling']
     assert result[0]['box']==[.1,.2,.1,.1]
     many=[{'text':'label','confidence':.9,'box':[0,0,.1,.1]}]*100
-    assert len(bound_lines(many))==16
+    assert len(bound_lines(many))==24
+    noise=[{'text':t,'confidence':c,'box':[0,0,.1,.1]} for t,c in [('=',.9),('aN',.6),('Lyi,',.69),('“',.84),('r',.83),('Jupiter',.96),('12',.78)]]
+    assert [l['text'] for l in bound_lines(noise)]==['Jupiter','12']
     assert sum(len(l['text']) for l in bound_lines([{'text':'x'*500,'confidence':.9,'box':[0,0,.1,.1]}]*10))<=1200
 
 

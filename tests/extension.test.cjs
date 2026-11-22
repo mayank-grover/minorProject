@@ -180,3 +180,54 @@ test('a country vcard is not misclassified as a person and named caption links a
   const context=window.WikiContext.extract(figure.querySelector('img'),0).context;
   assert.equal(context.article_kind,'general');assert.equal(context.subject_name,null);assert.equal(context.caption_subject,'The Brandenburg Gate');dom.window.close();
 });
+
+function loadWorker(fetchImpl) {
+  const vm = require('node:vm'); let listener;
+  const context = vm.createContext({URL, AbortSignal, Uint8Array, btoa, String, Number, JSON, Error, Promise, fetch: fetchImpl,
+    chrome: {action: {onClicked: {addListener() {}}}, runtime: {onMessage: {addListener: fn => { listener = fn; }}},
+      storage: {local: {get: async () => ({token: 'test-token'})}}}});
+  vm.runInContext(fs.readFileSync('extension/service_worker.js', 'utf8'), context);
+  const describe = payload => new Promise(resolve => listener({type: 'DESCRIBE', payload}, {tab: {url: 'https://en.wikipedia.org/wiki/X'}}, resolve));
+  return {context, describe};
+}
+function imageResponse(bytes) {
+  let sent = false;
+  return {ok: true, status: 200, headers: {get: () => String(bytes.length)},
+    body: {getReader: () => ({read: async () => sent ? {done: true} : (sent = true, {value: Uint8Array.from(bytes), done: false}), cancel: async () => {}})}};
+}
+const thumb = 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Red_Panda.jpg/250px-Red_Panda.jpg?utm_source=x';
+test('requests the 960 px Wikimedia thumbnail, skipping GIFs, originals and already-large thumbs', () => {
+  const {context} = loadWorker(() => {});
+  assert.equal(context.largerRendition(thumb), 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Red_Panda.jpg/960px-Red_Panda.jpg?utm_source=x');
+  assert.equal(context.largerRendition(thumb.replace(/Red_Panda\.jpg/g, 'Orrery.gif')), null);
+  assert.equal(context.largerRendition('https://upload.wikimedia.org/wikipedia/commons/a/ab/Small.png'), null);
+  assert.equal(context.largerRendition(thumb.replace('250px-', '1280px-')), null);
+});
+test('sends the larger rendition, and falls back to the displayed image if it fails', async () => {
+  for (const largeWorks of [true, false]) {
+    const fetched = []; let body;
+    const {describe} = loadWorker(async (url, options) => {
+      fetched.push(String(url));
+      if (String(url).startsWith('http://127.0.0.1')) { body = JSON.parse(options.body); return {ok: true, json: async () => ({description: 'ok'})}; }
+      if (String(url).includes('960px-')) { if (largeWorks) return imageResponse([9, 6, 0]); throw new Error('network'); }
+      return imageResponse([2, 5, 0]);
+    });
+    const reply = await describe({image_url: thumb, context: {}});
+    assert.equal(JSON.stringify(reply), JSON.stringify({result: {description: 'ok'}}));
+    assert(fetched[0].includes('960px-'));
+    assert.equal(body.image_base64, Buffer.from(largeWorks ? [9, 6, 0] : [2, 5, 0]).toString('base64'));
+    assert.equal(body.image_url, thumb);
+  }
+});
+
+test('drops TemplateStyles CSS and honorifics, uses the common-name title, and only treats a leading link as a subject when it is one',()=>{
+  const {window,dom}=setup();const d=window.document;
+  d.querySelector('#firstHeading').textContent='Ada Lovelace';
+  d.querySelector('#mw-content-text').innerHTML='<div class="mw-parser-output"><table class="infobox biography vcard"><tr><th class="infobox-above"><div class="honorific-prefix">The Right Honourable</div><div class="fn">The Countess of Lovelace</div></th></tr><tr><td class="infobox-image"><img src="https://upload.wikimedia.org/wikipedia/a.jpg" width="250" height="300"></td></tr><tr><th>Born</th><td>Augusta Ada Byron</td></tr></table><p><b>Augusta Ada King</b> was a mathematician who wrote about the engine.</p><figure><img src="https://upload.wikimedia.org/wikipedia/b.jpg" width="250" height="200"><figcaption><a href="/wiki/Biodiversity">Biodiversity</a> in a coral reef<style>.mw-parser-output .legend{page-break-inside:avoid}</style></figcaption></figure><figure><img src="https://upload.wikimedia.org/wikipedia/c.jpg" width="250" height="200"><figcaption><a href="/wiki/Einstein">Einstein</a> in 1947</figcaption></figure></div>';
+  const imgs=window.WikiContext.eligible();const lead=window.WikiContext.extract(imgs[0],0).context;
+  assert.equal(lead.subject_name,'Ada Lovelace');assert(lead.subject_aliases.includes('The Countess of Lovelace'));
+  assert(!JSON.stringify(lead).includes('Honourable'));
+  const reef=window.WikiContext.extract(imgs[1],1).context;
+  assert.equal(reef.caption,'Biodiversity in a coral reef');assert.equal(reef.caption_subject,null);
+  assert.equal(window.WikiContext.extract(imgs[2],2).context.caption_subject,'Einstein');dom.window.close();
+});

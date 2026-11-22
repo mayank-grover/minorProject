@@ -1,11 +1,16 @@
+import os
 import time
+import tempfile
+import uuid
 from fastapi.testclient import TestClient
 from backend.app import create_app
 from backend.settings import Settings
 from backend.errors import ProjectError
 
 def client_for(model, **kwargs):
-    return TestClient(create_app(Settings(token='test-token', extension_id='test-extension', load_model=False, **kwargs), model))
+    cache_path = os.path.join(tempfile.gettempdir(), 'wiki-test-' + uuid.uuid4().hex + '.sqlite3')
+    return TestClient(create_app(Settings(token='test-token', extension_id='test-extension', load_model=False,
+                                          cache_path=cache_path, **kwargs), model))
 
 AUTH = {'Authorization': 'Bearer test-token'}
 

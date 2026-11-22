@@ -1,0 +1,49 @@
+{
+  "validation_strategy": "StratifiedGroupKFold",
+  "folds": [
+    {
+      "fold": 1,
+      "test_article_count": 6,
+      "evaluated_pairs": 12,
+      "mean_factuality_score": 3.75,
+      "mean_usefulness_score": 3.5,
+      "unsupported_claim_rate": 0.0
+    },
+    {
+      "fold": 2,
+      "test_article_count": 6,
+      "evaluated_pairs": 12,
+      "mean_factuality_score": 4.25,
+      "mean_usefulness_score": 4.17,
+      "unsupported_claim_rate": 0.0
+    },
+    {
+      "fold": 3,
+      "test_article_count": 6,
+      "evaluated_pairs": 16,
+      "mean_factuality_score": 4.62,
+      "mean_usefulness_score": 4.5,
+      "unsupported_claim_rate": 0.0
+    },
+    {
+      "fold": 4,
+      "test_article_count": 5,
+      "evaluated_pairs": 8,
+      "mean_factuality_score": 4.5,
+      "mean_usefulness_score": 4.25,
+      "unsupported_claim_rate": 0.0
+    },
+    {
+      "fold": 5,
+      "test_article_count": 5,
+      "evaluated_pairs": 8,
+      "mean_factuality_score": 4.5,
+      "mean_usefulness_score": 4.5,
+      "unsupported_claim_rate": 0.0
+    }
+  ],
+  "aggregate": {
+    "cross_fold_mean_factuality": 4.32,
+    "cross_fold_mean_usefulness": 4.18
+  }
+}

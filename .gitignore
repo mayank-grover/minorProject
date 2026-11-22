@@ -16,3 +16,6 @@ htmlcov/
 .ruff_cache/
 .idea/
 .vscode/
+output/resume-ml/
+output/resume-swe/
+benchmark/results/live-test/blind_key_DO_NOT_OPEN_BEFORE_REVIEW.csv

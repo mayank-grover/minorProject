@@ -1,0 +1,137 @@
+{
+  "validation_strategy": "StratifiedGroupKFold",
+  "n_splits": 5,
+  "total_articles": 28,
+  "total_occurrences": 56,
+  "folds": [
+    {
+      "fold": 1,
+      "test_article_count": 6,
+      "test_occurrence_count": 12,
+      "test_articles": [
+        "Marie_Curie",
+        "Milky_Way",
+        "Photosynthesis",
+        "Population_pyramid",
+        "Roman_Empire",
+        "Taj_Mahal"
+      ],
+      "occurrences": [
+        "live-dev-05",
+        "live-dev-06",
+        "live-dev-09",
+        "live-dev-10",
+        "live-dev-13",
+        "live-dev-14",
+        "live-test-17",
+        "live-test-18",
+        "live-test-19",
+        "live-test-20",
+        "live-test-27",
+        "live-test-28"
+      ]
+    },
+    {
+      "fold": 2,
+      "test_article_count": 6,
+      "test_occurrence_count": 12,
+      "test_articles": [
+        "Eiffel_Tower",
+        "Frida_Kahlo",
+        "Keeling_Curve",
+        "Plate_tectonics",
+        "Red_panda",
+        "The_Starry_Night"
+      ],
+      "occurrences": [
+        "live-dev-01",
+        "live-dev-02",
+        "live-dev-17",
+        "live-dev-18",
+        "live-dev-19",
+        "live-dev-20",
+        "live-test-05",
+        "live-test-06",
+        "live-test-11",
+        "live-test-12",
+        "live-test-25",
+        "live-test-26"
+      ]
+    },
+    {
+      "fold": 3,
+      "test_article_count": 6,
+      "test_occurrence_count": 12,
+      "test_articles": [
+        "Bald_eagle",
+        "Citric_acid_cycle",
+        "Flag_of_Japan",
+        "Mona_Lisa",
+        "Nelson_Mandela",
+        "Normal_distribution"
+      ],
+      "occurrences": [
+        "live-dev-15",
+        "live-dev-16",
+        "live-dev-25",
+        "live-dev-26",
+        "live-test-01",
+        "live-test-02",
+        "live-test-09",
+        "live-test-10",
+        "live-test-21",
+        "live-test-22",
+        "live-test-23",
+        "live-test-24"
+      ]
+    },
+    {
+      "fold": 4,
+      "test_article_count": 5,
+      "test_occurrence_count": 10,
+      "test_articles": [
+        "Ada_Lovelace",
+        "Coral_reef",
+        "Flag_of_Brazil",
+        "Mitochondrion",
+        "Violin"
+      ],
+      "occurrences": [
+        "live-dev-03",
+        "live-dev-04",
+        "live-dev-11",
+        "live-dev-12",
+        "live-dev-23",
+        "live-dev-24",
+        "live-test-07",
+        "live-test-08",
+        "live-test-13",
+        "live-test-14"
+      ]
+    },
+    {
+      "fold": 5,
+      "test_article_count": 5,
+      "test_occurrence_count": 10,
+      "test_articles": [
+        "Human_heart",
+        "Mount_Everest",
+        "Pizza",
+        "Saturn",
+        "Supply_and_demand"
+      ],
+      "occurrences": [
+        "live-dev-07",
+        "live-dev-08",
+        "live-dev-21",
+        "live-dev-22",
+        "live-dev-27",
+        "live-dev-28",
+        "live-test-03",
+        "live-test-04",
+        "live-test-15",
+        "live-test-16"
+      ]
+    }
+  ]
+}
