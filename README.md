@@ -58,6 +58,22 @@ python3 mock_server.py
 
 The mock server uses the same address, `http://127.0.0.1:8000`. Reload the Wikipedia tab and try **Describe**. Stop the demo with **Control+C** before restarting the real backend with `python3 run.py`.
 
+## Cloud image descriptions with Groq
+
+The backend can use Groq for image description while keeping the existing local SmolVLM option. The Chrome extension still sends requests only to the local backend; when Groq is selected, that backend sends the prepared image and description prompt to Groq's vision API. The Groq API key stays in the backend `.env` file and must not be added to the extension.
+
+Add these settings to `.env`:
+
+```dotenv
+DESCRIPTION_PROVIDER=groq
+GROQ_API_KEY=your-groq-api-key
+GROQ_MODEL=qwen/qwen3.8-27b
+```
+
+Restart the backend. `/health` reports `description_provider: "groq"` when the cloud adapter is active. To switch back, set `DESCRIPTION_PROVIDER=local` and restart. The local Tesseract OCR and current Kokoro speech setup remain separate; voice-provider selection is not changed by this setting.
+
+When Groq is selected, image pixels and the selected article context included in the prompt are sent to Groq for processing. Review Groq's current model limits and data handling terms before using it with sensitive content.
+
 ## Tests
 
 Activate the project environment and run:

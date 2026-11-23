@@ -23,15 +23,22 @@ def run_generation(model, image, context, mode, detail='concise', analysis=None,
     analysis_start = time.perf_counter()
     try:
         analysis = analysis or inspect_image(model, image, context, mode, ocr_image, requested_type)
+    except ProjectError:
+        # Preserve cloud-provider errors (rate limit, auth, timeout) for the API/UI.
+        raise
     except Exception:
-        raise ProjectError('INFERENCE_FAILED', 'Image analysis failed. Check backend hardware and logs.', 503, True) from None
+        provider = 'Cloud' if getattr(model, 'device', None) == 'cloud' else 'Local'
+        raise ProjectError('INFERENCE_FAILED', f'{provider} image analysis failed. Check the backend logs.', 503, True) from None
     analysis_ms = (time.perf_counter() - analysis_start) * 1000
     prompt = build_prompt(context, mode, detail, analysis)
     def generate(text):
         try:
             return model.generate(image, text)
+        except ProjectError:
+            raise
         except Exception:
-            raise ProjectError('INFERENCE_FAILED', 'Local model inference failed. Check backend hardware and logs.', 503, True) from None
+            provider = 'Cloud' if getattr(model, 'device', None) == 'cloud' else 'Local'
+            raise ProjectError('INFERENCE_FAILED', f'{provider} description generation failed. Check the backend logs.', 503, True) from None
     output = generate(prompt)
     raw = output.text.strip()
     repair = None

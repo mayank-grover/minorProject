@@ -23,7 +23,7 @@ def check_existing_server():
         # Ignore proxy environment variables for this local health check.
         with build_opener(ProxyHandler({})).open('http://127.0.0.1:8000/health', timeout=3) as response:
             health = json.load(response)
-        ours = (isinstance(health, dict) and health.get('processing') == 'local'
+        ours = (isinstance(health, dict) and health.get('processing') in ('local', 'cloud')
                 and health.get('schema_version') == '1.0'
                 and 'configuration_fingerprint' in health and isinstance(health.get('model_id'), str))
         if ours:

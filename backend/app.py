@@ -15,6 +15,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from backend.schemas import DescribeRequest, DescribeResponse, SpeechRequest
 from backend.settings import Settings
 from backend.models.smolvlm import SmolVLM
+from cloud.groq import GroqVision
 from backend.data.images import fetch_image, decode_base64, prepare_image
 from backend.engine.generate import run_generation
 from backend.engine.prompts import PROMPT_VERSION
@@ -26,7 +27,14 @@ log = logging.getLogger('wiki_describe')
 
 def create_app(settings=None, model=None):
     settings = settings or Settings()
-    adapter = model or SmolVLM(settings.revision, settings.device, settings.max_tokens, settings.model_id)
+    if model is not None:
+        adapter = model
+    elif settings.description_provider == 'groq':
+        adapter = GroqVision(settings.groq_api_key, settings.groq_model, settings.timeout)
+    elif settings.description_provider == 'local':
+        adapter = SmolVLM(settings.revision, settings.device, settings.max_tokens, settings.model_id)
+    else:
+        raise ValueError('DESCRIPTION_PROVIDER must be either local or groq')
     cache = HybridDescriptionCache(sqlite_path=settings.cache_path)
     lane = threading.Lock()
     executor = ThreadPoolExecutor(max_workers=1)
@@ -92,7 +100,9 @@ def create_app(settings=None, model=None):
         config = adapter.configuration()
         return {'status': 'ok' if adapter.ready else 'degraded', 'model_ready': adapter.ready,
                 'model_id': adapter.model_id, 'model_revision': adapter.revision,
-                'processing': 'local', 'busy': lane.locked(), 'schema_version': '1.0',
+                'processing': 'cloud' if settings.description_provider == 'groq' else 'local',
+                'description_provider': settings.description_provider,
+                'busy': lane.locked(), 'schema_version': '1.0',
                 'ocr_engine': getattr(getattr(adapter, 'ocr', None), 'engine', 'unavailable'),
                 'authentication_configured': bool(settings.token),
                 'extension_configured': bool(settings.extension_id),
@@ -138,6 +148,8 @@ def create_app(settings=None, model=None):
             result = run_generation(adapter, image, payload.context, payload.mode, payload.detail,
                                     ocr_image=ocr_image, requested_type=payload.image_type)
             limitations = result['limitations']
+            if settings.description_provider == 'groq':
+                limitations.append('Image pixels and selected article context were sent to Groq for processing.')
             if animated:
                 limitations.append('Only the first animation frame was described.')
             response = DescribeResponse(request_id=payload.request_id, occurrence_id=payload.occurrence_id,

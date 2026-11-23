@@ -175,7 +175,7 @@
     try { payload = WikiContext.extract(img, index); payload.detail = detail; payload.image_type = item.type.value; }
     catch (error) { active.pending = false; status.textContent = error.message; return; }
     const snapshot = JSON.stringify({...payload, request_id: null});
-    status.textContent = 'Generating description. Local inference may take up to two minutes.';
+    status.textContent = 'Generating description. This can take up to two minutes.';
     result.hidden = true; controls.replaceChildren(button('Cancel request', () => {
       generation++; active.pending = false; status.textContent = 'Request cancelled. Model may finish in the background.'; controls.replaceChildren();
     }));

@@ -27,7 +27,7 @@
   };
   const occurrences = new WeakMap();
   function pageContext(article, img, title) {
-    const blocks = [...article.querySelectorAll('h2,h3,p')].filter(el => !el.closest('.infobox,.navbox,.metadata,.ambox,.reflist,figure,.thumb,.gallerybox'));
+    const blocks = [...article.querySelectorAll('h2,h3,p')].filter(el => !el.closest('[data-wiki-description-control],.infobox,.navbox,.metadata,.ambox,.reflist,figure,.thumb,.gallerybox'));
     const firstHeading = blocks.find(el => el.matches('h2'));
     const lead = blocks.filter(el => el.matches('p') && (!firstHeading || (el.compareDocumentPosition(firstHeading) & Node.DOCUMENT_POSITION_FOLLOWING)) && (clean(el, 1000) || '').length > 60);
     const cards = [...article.querySelectorAll('.infobox.vcard')];
@@ -126,7 +126,7 @@
       }
     }
     const blocks = Array.from(article.querySelectorAll('h2,h3,h4,p'))
-      .filter(el => !el.closest('.navbox,.metadata,.ambox,.infobox,.reflist,figure,.thumb,.gallerybox'));
+      .filter(el => !el.closest('[data-wiki-description-control],.navbox,.metadata,.ambox,.infobox,.reflist,figure,.thumb,.gallerybox'));
     let section = null;
     let preceding = null;
     let following = null;
