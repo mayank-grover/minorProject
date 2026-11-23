@@ -40,11 +40,13 @@ Keep the terminal open. The first launch may download model files. Wait for “A
 4. Set `ALLOWED_EXTENSION_ID` in `.env` to this extension’s ID and restart the backend.
 5. Open a Wikipedia article, reload the page, and use **Describe** beside an image.
 
+Choose **English** or **Hindi** in the language selector beside each image before requesting a description. Hindi output is requested in Devanagari script; image labels and proper names may remain in their recognizable original form.
+
 The extension’s backend health button checks that the local service is reachable. A green health check does not verify model quality.
 
 ### Natural voice narration
 
-Read aloud uses the optional local Kokoro neural speech model by default, with a device speech voice as a fallback. Choose an American or British English voice, preview it, and adjust the rate beside the generated description. The backend prepares the model and offered voice packs during startup, then synthesizes a short warm-up phrase before reporting ready. The first startup may take longer while it downloads Kokoro weights, voice packs, and English pronunciation data from their upstream hosts. The text being spoken stays on the computer, and cached assets can be used offline. Set `NEURAL_TTS_WARMUP=0` to skip startup preparation or `NEURAL_TTS_ENABLED=0` to disable neural narration. Kokoro and its English pronunciation dependencies have their own licenses; preserve their notices if redistributing the software or model assets.
+Read aloud keeps local Kokoro voices and the device speech voice, and adds Boson Higgs TTS 3 for cloud narration. Kokoro voices are English; Boson supports Hindi and receives the description text through its API. To enable Boson, add `BOSON_API_KEY=your-key` to the backend `.env` file, restart the backend, then select a Boson voice beside the image. Keep the key out of the extension. The extension sends narration text to Boson only when a Boson voice is selected; Kokoro continues to synthesize locally. The backend can still prepare Kokoro at startup as before. Set `NEURAL_TTS_WARMUP=0` to skip startup preparation or `NEURAL_TTS_ENABLED=0` to disable Kokoro narration. Review Boson's current [TTS documentation](https://docs.boson.ai/models/higgs-tts/overview) and account terms for language support, voice choices, and usage.
 
 ## Demo mode (no model required)
 

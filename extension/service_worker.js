@@ -51,7 +51,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const bytes = new Uint8Array(await response.arrayBuffer());
       let binary = '';
       for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
-      sendResponse({audio_base64: btoa(binary)});
+      sendResponse({audio_base64: btoa(binary), content_type: response.headers.get('content-type') || 'audio/wav'});
       return;
     }
     const request = message.payload;

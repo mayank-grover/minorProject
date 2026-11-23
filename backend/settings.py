@@ -18,6 +18,8 @@ class Settings:
     max_tokens: int = int(os.getenv('MAX_NEW_TOKENS', '192'))
     groq_api_key: str = os.getenv('GROQ_API_KEY', '')
     groq_model: str = os.getenv('GROQ_MODEL', 'qwen/qwen3.8-27b')
+    boson_api_key: str = os.getenv('BOSON_API_KEY', '')
+    boson_tts_model: str = os.getenv('BOSON_TTS_MODEL', 'higgs-tts-3')
     cache_path: str = os.getenv('DESCRIPTION_CACHE_PATH', 'artifacts/cache.sqlite3')
     neural_tts_enabled: bool = os.getenv('NEURAL_TTS_ENABLED', '1') == '1'
     neural_tts_warmup: bool = os.getenv('NEURAL_TTS_WARMUP', '1') == '1'

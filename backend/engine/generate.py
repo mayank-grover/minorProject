@@ -19,7 +19,7 @@ def copied_run(text, context):
     return bool(grams(words(text)) & grams(words(source)))
 
 
-def run_generation(model, image, context, mode, detail='concise', analysis=None, ocr_image=None, requested_type='auto'):
+def run_generation(model, image, context, mode, detail='concise', analysis=None, ocr_image=None, requested_type='auto', language='en'):
     analysis_start = time.perf_counter()
     try:
         analysis = analysis or inspect_image(model, image, context, mode, ocr_image, requested_type)
@@ -30,7 +30,7 @@ def run_generation(model, image, context, mode, detail='concise', analysis=None,
         provider = 'Cloud' if getattr(model, 'device', None) == 'cloud' else 'Local'
         raise ProjectError('INFERENCE_FAILED', f'{provider} image analysis failed. Check the backend logs.', 503, True) from None
     analysis_ms = (time.perf_counter() - analysis_start) * 1000
-    prompt = build_prompt(context, mode, detail, analysis)
+    prompt = build_prompt(context, mode, detail, analysis, language)
     def generate(text):
         try:
             return model.generate(image, text)
@@ -45,7 +45,7 @@ def run_generation(model, image, context, mode, detail='concise', analysis=None,
     if mode == 'context_aware' and copied_run(raw, context):
         # One recorded retry without long article prose; title and caption stay.
         reduced = context.model_copy(update={'nearby_text': None, 'page_summary': None, 'image_overview': []})
-        retry_prompt = build_prompt(reduced, mode, detail, analysis)
+        retry_prompt = build_prompt(reduced, mode, detail, analysis, language)
         first, output = output, generate(retry_prompt)
         output.inference_ms += first.inference_ms
         repair = {'reason': 'context_copy', 'first_output': raw,
@@ -98,7 +98,7 @@ def run_generation(model, image, context, mode, detail='concise', analysis=None,
         limitations.append('Names are associated using article source text, not facial recognition.')
     return {'description': description, 'raw_output': raw, 'prompt': prompt,
             'prompt_version': PROMPT_VERSION, 'prompt_hash': hashlib.sha256(prompt.encode()).hexdigest(),
-            'context_hash': hash_context(context, mode, analysis['image_type']),
+            'context_hash': hash_context(context, mode, analysis['image_type'], language),
             'inference_ms': output.inference_ms, 'analysis_ms': analysis_ms, 'image_type':analysis['image_type'],
             'description_focus':editorial['focus'], 'resolved_subject':editorial['subject'],
             'type_source':analysis['type_source'], 'ocr_status':analysis['ocr']['status'], 'ocr_engine':analysis['ocr']['engine'],

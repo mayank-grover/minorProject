@@ -20,6 +20,7 @@ from backend.data.images import fetch_image, decode_base64, prepare_image
 from backend.engine.generate import run_generation
 from backend.engine.prompts import PROMPT_VERSION
 from backend.engine.speech import KokoroSpeech
+from cloud.boson import BosonSpeech
 from backend.errors import ProjectError
 from backend.data.redis_cache import HybridDescriptionCache
 
@@ -38,7 +39,9 @@ def create_app(settings=None, model=None):
     cache = HybridDescriptionCache(sqlite_path=settings.cache_path)
     lane = threading.Lock()
     executor = ThreadPoolExecutor(max_workers=1)
+    boson_executor = ThreadPoolExecutor(max_workers=1)
     speech = KokoroSpeech()
+    boson_speech = BosonSpeech(settings.boson_api_key, settings.boson_tts_model, settings.timeout)
 
     @asynccontextmanager
     async def lifespan(app):
@@ -57,6 +60,7 @@ def create_app(settings=None, model=None):
                 log.warning('Natural speech warm-up failed (%s); it can be retried from Read aloud.', type(exc).__name__)
         yield
         executor.shutdown(wait=False, cancel_futures=True)
+        boson_executor.shutdown(wait=False, cancel_futures=True)
 
     app = FastAPI(title='Wikipedia Image Accessibility', version='0.1.0', lifespan=lifespan)
     app.state.model = adapter
@@ -108,6 +112,7 @@ def create_app(settings=None, model=None):
                 'extension_configured': bool(settings.extension_id),
                 'neural_tts_enabled': settings.neural_tts_enabled,
                 'neural_tts_ready': speech.ready,
+                'boson_tts_ready': boson_speech.ready,
                 'configuration_fingerprint': hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()[:16]}
 
     def work(payload):
@@ -118,7 +123,7 @@ def create_app(settings=None, model=None):
 
             # Check fast persistent cache (SQLite / Redis)
             from backend.engine.article_context import hash_context
-            ctx_hash = hash_context(payload.context, payload.mode)
+            ctx_hash = hash_context(payload.context, payload.mode, language=payload.language)
             cached_entry = cache.get(digest, ctx_hash, payload.mode, payload.detail)
             if cached_entry:
                 meta = cached_entry["metadata"]
@@ -138,15 +143,16 @@ def create_app(settings=None, model=None):
                 return DescribeResponse(
                     request_id=payload.request_id, occurrence_id=payload.occurrence_id,
                     description=cached_entry["description"], mode=payload.mode, detail=payload.detail,
+                    language=payload.language,
                     model_id=meta.get("model_id", adapter.model_id), model_revision=meta.get("model_revision", adapter.revision),
-                    prompt_version=meta.get("prompt_version", "ab-11"), inference_ms=0.0,
+                    prompt_version=meta.get("prompt_version", PROMPT_VERSION), inference_ms=0.0,
                     total_ms=(time.perf_counter() - start) * 1000, image_hash=digest,
                     context_hash=ctx_hash, limitations=meta.get("limitations", []) + [f"Result retrieved from local {cached_entry.get('source', 'sqlite')} cache."],
                     image_type=meta.get("image_type", payload.image_type), ocr_status=meta.get("ocr_status", "cached"), analysis_ms=0.0
                 )
             ocr_image = prepare_image(data, max_side=1600)[0] if getattr(adapter, 'ocr', None) else image
             result = run_generation(adapter, image, payload.context, payload.mode, payload.detail,
-                                    ocr_image=ocr_image, requested_type=payload.image_type)
+                                    ocr_image=ocr_image, requested_type=payload.image_type, language=payload.language)
             limitations = result['limitations']
             if settings.description_provider == 'groq':
                 limitations.append('Image pixels and selected article context were sent to Groq for processing.')
@@ -154,6 +160,7 @@ def create_app(settings=None, model=None):
                 limitations.append('Only the first animation frame was described.')
             response = DescribeResponse(request_id=payload.request_id, occurrence_id=payload.occurrence_id,
                 description=result['description'], mode=payload.mode, detail=payload.detail,
+                language=payload.language,
                 model_id=adapter.model_id, model_revision=adapter.revision, prompt_version=result['prompt_version'],
                 inference_ms=result['inference_ms'], total_ms=(time.perf_counter()-start)*1000,
                 image_hash=digest, context_hash=result['context_hash'], limitations=limitations,
@@ -193,20 +200,30 @@ def create_app(settings=None, model=None):
 
     @app.post('/v1/speech')
     async def synthesize_speech(payload: SpeechRequest, request: Request):
-        if not settings.neural_tts_enabled:
-            raise ProjectError('TTS_DISABLED', 'Natural voice synthesis is disabled in the local backend.', 503)
         expected = 'Bearer ' + settings.token
         if not settings.token or not hmac.compare_digest(request.headers.get('authorization', ''), expected):
             raise ProjectError('UNAUTHORIZED', 'Configure the local backend token in extension options.', 401)
-        future = asyncio.get_running_loop().run_in_executor(
-            executor, speech.synthesize, payload.text, payload.voice, payload.speed,
-        )
+        if payload.provider == 'kokoro':
+            if not settings.neural_tts_enabled:
+                raise ProjectError('TTS_DISABLED', 'Local Kokoro voice is disabled in the backend settings.', 503)
+            future = asyncio.get_running_loop().run_in_executor(
+                executor, speech.synthesize, payload.text, payload.voice, payload.speed,
+            )
+        else:
+            future = asyncio.get_running_loop().run_in_executor(
+                boson_executor, boson_speech.synthesize,
+                payload.text, payload.voice, payload.speed, payload.language,
+            )
         try:
-            audio = await asyncio.wait_for(asyncio.shield(future), settings.timeout)
+            result = await asyncio.wait_for(asyncio.shield(future), settings.timeout)
         except asyncio.TimeoutError:
             future.add_done_callback(lambda f: f.exception() if not f.cancelled() else None)
-            raise ProjectError('TTS_TIMEOUT', 'Natural voice synthesis timed out. Try the system voice.', 504, True) from None
-        return Response(content=audio, media_type='audio/wav', headers={'Cache-Control': 'no-store'})
+            raise ProjectError('TTS_TIMEOUT', 'Voice synthesis timed out. Try again or use your device voice.', 504, True) from None
+        if payload.provider == 'boson':
+            audio, media_type = result
+        else:
+            audio, media_type = result, 'audio/wav'
+        return Response(content=audio, media_type=media_type, headers={'Cache-Control': 'no-store'})
 
     return app
 

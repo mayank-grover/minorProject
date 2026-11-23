@@ -54,6 +54,7 @@ class DescribeRequest(StrictModel):
     context: Context
     mode: Literal['image_only', 'context_aware'] = 'context_aware'
     detail: Literal['concise', 'detailed'] = 'concise'
+    language: Literal['en', 'hi'] = 'en'
 
     _article = field_validator('article_url')(validate_article_url)
     _image = field_validator('image_url')(validate_image_url)
@@ -75,6 +76,7 @@ class DescribeResponse(StrictModel):
     description: str = Field(min_length=1)
     mode: Literal['image_only', 'context_aware']
     detail: Literal['concise', 'detailed']
+    language: Literal['en', 'hi'] = 'en'
     model_id: str
     model_revision: str
     prompt_version: str
@@ -88,10 +90,20 @@ class DescribeResponse(StrictModel):
 
 class SpeechRequest(StrictModel):
     text: str = Field(min_length=1, max_length=3000)
-    voice: Literal['af_heart', 'af_bella', 'af_sarah', 'af_nicole', 'af_sky',
-                   'am_adam', 'am_michael', 'bf_emma', 'bf_isabella',
-                   'bm_george', 'bm_lewis'] = 'af_heart'
+    provider: Literal['kokoro', 'boson'] = 'kokoro'
+    voice: str = Field(default='af_heart', min_length=1, max_length=64)
     speed: float = Field(default=1.0, ge=0.8, le=1.2)
+    language: Literal['en', 'hi'] = 'en'
+
+    @model_validator(mode='after')
+    def validate_voice_provider(self):
+        kokoro_voices = {'af_heart', 'af_bella', 'af_sarah', 'af_nicole', 'af_sky',
+                         'am_adam', 'am_michael', 'bf_emma', 'bf_isabella', 'bm_george', 'bm_lewis'}
+        boson_voices = {'default', 'chloe', 'eleanor', 'jake', 'marcus', 'nora', 'oliver'}
+        allowed = kokoro_voices if self.provider == 'kokoro' else boson_voices
+        if self.voice not in allowed:
+            raise ValueError('Voice is not available for the selected speech provider')
+        return self
 
     @field_validator('text', mode='before')
     @classmethod

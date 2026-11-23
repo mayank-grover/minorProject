@@ -34,16 +34,21 @@
     window.speechSynthesis?.cancel();
   }
   const KOKORO_VOICES = [
-    ['af_heart', 'Natural — US, Heart'], ['af_bella', 'Natural — US, Bella'],
-    ['af_sarah', 'Natural — US, Sarah'], ['af_nicole', 'Natural — US, Nicole'],
-    ['af_sky', 'Natural — US, Sky'], ['am_adam', 'Natural — US, Adam'],
-    ['am_michael', 'Natural — US, Michael'], ['bf_emma', 'Natural — UK, Emma'],
-    ['bf_isabella', 'Natural — UK, Isabella'], ['bm_george', 'Natural — UK, George'],
-    ['bm_lewis', 'Natural — UK, Lewis']
+    ['kokoro:af_heart', 'Kokoro English — US, Heart'], ['kokoro:af_bella', 'Kokoro English — US, Bella'],
+    ['kokoro:af_sarah', 'Kokoro English — US, Sarah'], ['kokoro:af_nicole', 'Kokoro English — US, Nicole'],
+    ['kokoro:af_sky', 'Kokoro English — US, Sky'], ['kokoro:am_adam', 'Kokoro English — US, Adam'],
+    ['kokoro:am_michael', 'Kokoro English — US, Michael'], ['kokoro:bf_emma', 'Kokoro English — UK, Emma'],
+    ['kokoro:bf_isabella', 'Kokoro English — UK, Isabella'], ['kokoro:bm_george', 'Kokoro English — UK, George'],
+    ['kokoro:bm_lewis', 'Kokoro English — UK, Lewis']
+  ];
+  const BOSON_VOICES = [
+    ['boson:default', 'Boson cloud — Auto'], ['boson:eleanor', 'Boson cloud — Eleanor'],
+    ['boson:oliver', 'Boson cloud — Oliver'], ['boson:chloe', 'Boson cloud — Chloe'],
+    ['boson:nora', 'Boson cloud — Nora'], ['boson:marcus', 'Boson cloud — Marcus'], ['boson:jake', 'Boson cloud — Jake']
   ];
   function speechCompletionStatus(session) {
     const action = session.preview ? 'Voice preview finished' : 'Description read aloud';
-    const voice = session.kind === 'audio' ? 'natural voice' : 'device voice';
+    const voice = session.provider === 'boson' ? 'Boson cloud voice' : session.provider === 'kokoro' ? 'Kokoro voice' : 'device voice';
     return `${action} with the ${voice}.${session.fallbackReason ? ' Natural voice was unavailable.' : ''}`;
   }
   function startSystemSpeech(session, text, speed) {
@@ -52,13 +57,16 @@
       return;
     }
     const utterance = new SpeechSynthesisUtterance(text);
-    const voices = window.speechSynthesis.getVoices().filter(v => v.localService && /^en(?:-|_)/i.test(v.lang));
-    const score = v => (/enhanced|premium|natural/i.test(v.name) ? 4 : 0) + (v.default ? 2 : 0) + (/^en-US$/i.test(v.lang) ? 1 : 0);
+    const language = session.item.language?.value || 'en';
+    const languagePattern = language === 'hi' ? /^hi(?:-|_)/i : /^en(?:-|_)/i;
+    const voices = window.speechSynthesis.getVoices().filter(v => v.localService && languagePattern.test(v.lang));
+    const preferredLocale = language === 'hi' ? 'hi-IN' : 'en-US';
+    const score = v => (/enhanced|premium|natural/i.test(v.name) ? 4 : 0) + (v.default ? 2 : 0) + (new RegExp('^' + preferredLocale.replace('-', '[-_]') + '$', 'i').test(v.lang) ? 1 : 0);
     voices.sort((a, b) => score(b) - score(a));
     if (voices[0]) utterance.voice = voices[0];
-    utterance.lang = voices[0]?.lang || 'en-US';
+    utterance.lang = voices[0]?.lang || (language === 'hi' ? 'hi-IN' : 'en-US');
     utterance.rate = speed; utterance.pitch = 1; utterance.volume = 1;
-    session.kind = 'system'; session.utterance = utterance;
+    session.kind = 'system'; session.provider = 'system'; session.utterance = utterance;
     session.pause.hidden = false;
     utterance.onend = () => finishSpeech(session, speechCompletionStatus(session));
     utterance.onerror = event => {
@@ -75,22 +83,34 @@
   }
   async function startSpeech(item, read, pause, text, voice, speed, preview = false) {
     if (narration?.item === item) { stopSpeech(); return; }
+    if (item.resultLanguage && item.resultLanguage !== item.language.value) {
+      item.status.textContent = 'Language changed. Request a fresh description before reading it aloud.';
+      return;
+    }
+    const speechLanguage = item.resultLanguage || item.language.value;
+    const [provider, voiceName] = voice.includes(':') ? voice.split(':', 2) : [voice === 'system' ? 'system' : 'kokoro', voice];
+    if (provider === 'kokoro' && speechLanguage === 'hi') {
+      item.status.textContent = 'Kokoro voices are English. Choose a Boson voice or an available Hindi device voice.';
+      return;
+    }
     stopSpeech();
-    const session = {item, read, pause, kind: voice === 'system' ? 'system' : 'kokoro', preview};
+    const session = {item, read, pause, kind: provider, provider, preview};
     narration = session;
     read.textContent = 'Stop reading'; read.setAttribute('aria-pressed', 'true');
     pause.hidden = true; pause.textContent = 'Pause reading';
-    if (voice === 'system') { startSystemSpeech(session, text, speed); return; }
-    item.status.textContent = 'Preparing the natural voice locally…';
+    if (provider === 'system') { startSystemSpeech(session, text, speed); return; }
+    item.status.textContent = provider === 'boson' ? 'Preparing Boson cloud voice…' : 'Preparing local Kokoro voice…';
     try {
-      const result = await chrome.runtime.sendMessage({type: 'SYNTHESIZE', payload: {text, voice, speed}});
+      const result = await chrome.runtime.sendMessage({type: 'SYNTHESIZE', payload: {
+        text, provider, voice: voiceName, speed, language: speechLanguage,
+      }});
       if (narration !== session) return;
       if (result?.error) throw new Error(result.error);
       if (!result?.audio_base64) throw new Error('Speech service returned no audio.');
       const binary = atob(result.audio_base64);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      session.objectURL = URL.createObjectURL(new Blob([bytes], {type: 'audio/wav'}));
+      session.objectURL = URL.createObjectURL(new Blob([bytes], {type: result.content_type || 'audio/wav'}));
       session.player = new Audio(session.objectURL);
       session.kind = 'audio';
       session.player.onended = () => finishSpeech(session, speechCompletionStatus(session));
@@ -112,23 +132,26 @@
         return;
       }
       session.fallbackReason = error.message;
-      item.status.textContent = `Natural voice unavailable (${error.message}). Using your system voice.`;
+      item.status.textContent = `${provider === 'boson' ? 'Boson cloud voice' : 'Kokoro voice'} unavailable (${error.message}). Using your device voice.`;
       startSystemSpeech(session, text, speed);
     }
   }
   function speechControls(item) {
     const voiceLabel = el('label', 'Narration voice ');
     const voice = el('select', '', {'aria-label': 'Narration voice'});
-    for (const [value, label] of [['af_heart', 'Natural — US, Heart'], ...KOKORO_VOICES.slice(1), ['system', 'Device voice']]) {
+    for (const [value, label] of [...KOKORO_VOICES, ...BOSON_VOICES, ['system', 'Device voice']]) {
       voice.append(el('option', label, {value}));
     }
+    if ((item.resultLanguage || item.language.value) === 'hi') voice.value = 'boson:default';
     voiceLabel.append(voice);
     const speedLabel = el('label', 'Speed ');
     const speed = el('input', '', {type: 'range', min: '0.8', max: '1.2', step: '0.05', value: '1', 'aria-label': 'Narration speed'});
     const speedValue = el('span', '1.00×');
     speed.addEventListener('input', () => { speedValue.textContent = `${Number(speed.value).toFixed(2)}×`; });
     speedLabel.append(speed, speedValue);
-    const preview = button('Preview voice', () => startSpeech(item, read, pause, 'Here is a preview of this reading voice.', voice.value, Number(speed.value), true));
+    const preview = button('Preview voice', () => startSpeech(item, read, pause,
+      item.language.value === 'hi' ? 'यह आवाज़ का एक नमूना है।' : 'Here is a preview of this reading voice.',
+      voice.value, Number(speed.value), true));
     const settings = el('div', '', {class: 'wiki-speech-settings'});
     settings.append(voiceLabel, speedLabel, preview);
     const read = button('Read aloud', () => startSpeech(
@@ -172,7 +195,7 @@
     const url = location.href;
     active = {img, index, trigger, item, pending: true}; opener = trigger;
     let payload;
-    try { payload = WikiContext.extract(img, index); payload.detail = detail; payload.image_type = item.type.value; }
+    try { payload = WikiContext.extract(img, index); payload.detail = detail; payload.image_type = item.type.value; payload.language = item.language.value; }
     catch (error) { active.pending = false; status.textContent = error.message; return; }
     const snapshot = JSON.stringify({...payload, request_id: null});
     status.textContent = 'Generating description. This can take up to two minutes.';
@@ -182,7 +205,7 @@
     try {
       const response = await chrome.runtime.sendMessage({type: 'DESCRIBE', payload});
       if (id !== generation || !enabled || !img.isConnected || location.href !== url) return;
-      const current = WikiContext.extract(img, index); current.detail = detail; current.image_type = item.type.value;
+      const current = WikiContext.extract(img, index); current.detail = detail; current.image_type = item.type.value; current.language = item.language.value;
       if (JSON.stringify({...current, request_id: null}) !== snapshot) {
         active.pending = false; status.textContent = 'Image or article context changed. Please request a fresh description.'; controls.replaceChildren(); return;
       }
@@ -191,9 +214,10 @@
       if (!data?.description?.trim()) throw new Error('Backend returned an empty description.');
       if (data.request_id !== payload.request_id || data.occurrence_id !== payload.occurrence_id) throw new Error('Response does not match this image. Retry.');
       active.pending = false;
+      item.resultLanguage = data.language || payload.language;
       heading.textContent = `AI-generated description for image ${index + 1}`;
       result.querySelector('.description').textContent = data.description;
-      result.querySelector('.metadata').textContent = `${data.model_id} · ${(data.inference_ms / 1000).toFixed(1)} s inference · Local processing${data.image_type ? ' · ' + data.image_type + ' description' : ''}`;
+      result.querySelector('.metadata').textContent = `${data.model_id} · ${(data.inference_ms / 1000).toFixed(1)} s inference · ${data.language === 'hi' ? 'Hindi' : 'English'}${data.image_type ? ' · ' + data.image_type + ' description' : ''}`;
       result.querySelector('.limitations').textContent = data.limitations.join(' ');
       result.hidden = false;
       status.textContent = 'Description ready. Use Read description to move to the result.';
@@ -227,6 +251,11 @@
       }
       const typeLabel = el('label', 'Description style ', {for:typeID});
       typeLabel.append(type);
+      const languageID = `wiki-description-language-${crypto.randomUUID()}`;
+      const language = el('select', '', {id:languageID});
+      language.append(el('option', 'English', {value:'en'}), el('option', 'Hindi', {value:'hi'}));
+      const languageLabel = el('label', 'Language ', {for:languageID});
+      languageLabel.append(language);
       const resultID = `wiki-description-result-${crypto.randomUUID()}`;
       const surface = el('div', '', {class: 'wiki-description-surface', hidden: ''});
       const status = el('p', '', {role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true'});
@@ -238,9 +267,9 @@
       const trigger = button(`Describe ${name}`, () => describe(img, WikiContext.eligible().indexOf(img), trigger));
       trigger.classList.add('primary-describe');
       trigger.setAttribute('aria-controls', resultID);
-      wrapper.append(trigger, typeLabel, surface);
+      wrapper.append(trigger, typeLabel, languageLabel, surface);
       const link = img.closest('a'); (link || img).after(wrapper);
-      registered.set(img, {wrapper, trigger, surface, status, controls, result, heading, type});
+      registered.set(img, {wrapper, trigger, surface, status, controls, result, heading, type, language});
     });
     list.replaceChildren(...images.map((img, index) => button(`Go to image ${index + 1}`, () => {
       const trigger = registered.get(img).trigger; trigger.scrollIntoView({block: 'center'}); trigger.focus();

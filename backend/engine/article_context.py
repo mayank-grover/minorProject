@@ -8,13 +8,15 @@ def data_of(context):
     return context.model_dump() if hasattr(context, 'model_dump') else dict(context)
 
 
-def hash_context(context, mode, image_type='auto'):
+def hash_context(context, mode, image_type='auto', language='en'):
     """Stable fingerprint for the context actually used to generate a description."""
     editorial = editorial_context(context, mode, image_type)
     data = data_of(context)
     used = editorial['source']
     if mode == 'context_aware' and (data.get('caption') or '').lower().startswith('conservation status:'):
         used = {'caption': data['caption']}
+    if language != 'en':
+        used = {**used, '_output_language': language}
     encoded = json.dumps(used, sort_keys=True)
     return hashlib.sha256(encoded.encode('utf-8')).hexdigest()
 
