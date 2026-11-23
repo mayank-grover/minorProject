@@ -33,12 +33,27 @@ chrome.action.onClicked.addListener(tab => {
   chrome.tabs.sendMessage(tab.id, {type: 'TOGGLE'}).catch(() => {});
 });
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type !== 'DESCRIBE') return false;
+  if (!['DESCRIBE', 'SYNTHESIZE'].includes(message.type)) return false;
   if (!sender.tab?.url?.startsWith('https://en.wikipedia.org/wiki/')) {
     sendResponse({error: 'Requests must originate from a Wikipedia article.'}); return false;
   }
   (async () => {
     const {token = 'demo-token'} = await chrome.storage.local.get('token');
+    if (message.type === 'SYNTHESIZE') {
+      const response = await fetch('http://127.0.0.1:8000/v1/speech', {
+        method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`},
+        body: JSON.stringify(message.payload), signal: AbortSignal.timeout(130000)
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.error?.message || `Speech service returned ${response.status}.`);
+      }
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      let binary = '';
+      for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+      sendResponse({audio_base64: btoa(binary)});
+      return;
+    }
     const request = message.payload;
     const imageURL = new URL(request.image_url);
     if (imageURL.protocol !== 'https:' || !['upload.wikimedia.org', 'thumb.wikimedia.org'].includes(imageURL.hostname) || imageURL.username || imageURL.password) {

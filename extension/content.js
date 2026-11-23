@@ -10,66 +10,146 @@
     return node;
   };
   const button = (text, action) => { const node = el('button', text, {type: 'button'}); node.addEventListener('click', action); return node; };
-  function finishSpeech(session) {
+  function finishSpeech(session, statusText) {
     if (narration !== session) return;
     narration = null;
+    if (session.player) {
+      session.player.pause();
+      session.player.removeAttribute('src');
+      session.player.load();
+    }
+    if (session.objectURL) URL.revokeObjectURL(session.objectURL);
     session.read.textContent = 'Read aloud';
     session.read.setAttribute('aria-pressed', 'false');
     if (document.activeElement === session.pause) session.read.focus();
     session.pause.hidden = true;
     session.pause.textContent = 'Pause reading';
+    if (statusText) session.item.status.textContent = statusText;
   }
   function stopSpeech() {
     if (!narration) return;
     const session = narration;
     // Clear our state before cancel; a delayed end/error must not reset a newer reading.
-    finishSpeech(session);
-    window.speechSynthesis.cancel();
+    finishSpeech(session, 'Reading stopped.');
+    window.speechSynthesis?.cancel();
+  }
+  const KOKORO_VOICES = [
+    ['af_heart', 'Natural — US, Heart'], ['af_bella', 'Natural — US, Bella'],
+    ['af_sarah', 'Natural — US, Sarah'], ['af_nicole', 'Natural — US, Nicole'],
+    ['af_sky', 'Natural — US, Sky'], ['am_adam', 'Natural — US, Adam'],
+    ['am_michael', 'Natural — US, Michael'], ['bf_emma', 'Natural — UK, Emma'],
+    ['bf_isabella', 'Natural — UK, Isabella'], ['bm_george', 'Natural — UK, George'],
+    ['bm_lewis', 'Natural — UK, Lewis']
+  ];
+  function speechCompletionStatus(session) {
+    const action = session.preview ? 'Voice preview finished' : 'Description read aloud';
+    const voice = session.kind === 'audio' ? 'natural voice' : 'device voice';
+    return `${action} with the ${voice}.${session.fallbackReason ? ' Natural voice was unavailable.' : ''}`;
+  }
+  function startSystemSpeech(session, text, speed) {
+    if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) {
+      finishSpeech(session, 'Speech synthesis is unavailable in this browser.');
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance(text);
+    const voices = window.speechSynthesis.getVoices().filter(v => v.localService && /^en(?:-|_)/i.test(v.lang));
+    const score = v => (/enhanced|premium|natural/i.test(v.name) ? 4 : 0) + (v.default ? 2 : 0) + (/^en-US$/i.test(v.lang) ? 1 : 0);
+    voices.sort((a, b) => score(b) - score(a));
+    if (voices[0]) utterance.voice = voices[0];
+    utterance.lang = voices[0]?.lang || 'en-US';
+    utterance.rate = speed; utterance.pitch = 1; utterance.volume = 1;
+    session.kind = 'system'; session.utterance = utterance;
+    session.pause.hidden = false;
+    utterance.onend = () => finishSpeech(session, speechCompletionStatus(session));
+    utterance.onerror = event => {
+      if (narration !== session) return;
+      finishSpeech(session, ['canceled', 'interrupted'].includes(event.error) ? 'Reading stopped.' : 'System voice playback failed. Check your device speech settings.');
+    };
+    try {
+      if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+      window.speechSynthesis.speak(utterance);
+      session.item.status.textContent = session.preview ? 'Playing voice preview with the device voice.' : 'Reading description with the device voice.';
+    } catch {
+      finishSpeech(session, 'System voice playback failed. Try Read aloud again.');
+    }
+  }
+  async function startSpeech(item, read, pause, text, voice, speed, preview = false) {
+    if (narration?.item === item) { stopSpeech(); return; }
+    stopSpeech();
+    const session = {item, read, pause, kind: voice === 'system' ? 'system' : 'kokoro', preview};
+    narration = session;
+    read.textContent = 'Stop reading'; read.setAttribute('aria-pressed', 'true');
+    pause.hidden = true; pause.textContent = 'Pause reading';
+    if (voice === 'system') { startSystemSpeech(session, text, speed); return; }
+    item.status.textContent = 'Preparing the natural voice locally…';
+    try {
+      const result = await chrome.runtime.sendMessage({type: 'SYNTHESIZE', payload: {text, voice, speed}});
+      if (narration !== session) return;
+      if (result?.error) throw new Error(result.error);
+      if (!result?.audio_base64) throw new Error('Speech service returned no audio.');
+      const binary = atob(result.audio_base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      session.objectURL = URL.createObjectURL(new Blob([bytes], {type: 'audio/wav'}));
+      session.player = new Audio(session.objectURL);
+      session.kind = 'audio';
+      session.player.onended = () => finishSpeech(session, speechCompletionStatus(session));
+      session.player.onerror = () => {
+        if (narration === session) finishSpeech(session, 'Natural voice playback failed. Try the system voice.');
+      };
+      await session.player.play();
+      if (narration === session) {
+        pause.hidden = false;
+        item.status.textContent = session.preview ? 'Playing voice preview with the natural voice.' : 'Reading description with the natural voice.';
+      }
+    } catch (error) {
+      if (narration !== session) return;
+      if (session.player) {
+        const message = error.name === 'NotAllowedError'
+          ? 'Chrome blocked natural-audio autoplay. Click Preview voice or Read aloud again, or choose Device voice.'
+          : `Natural audio could not be played (${error.message}). Choose Device voice to use the fallback.`;
+        finishSpeech(session, message);
+        return;
+      }
+      session.fallbackReason = error.message;
+      item.status.textContent = `Natural voice unavailable (${error.message}). Using your system voice.`;
+      startSystemSpeech(session, text, speed);
+    }
   }
   function speechControls(item) {
-    const read = button('Read aloud', () => {
-      if (narration?.item === item) { stopSpeech(); return; }
-      if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) {
-        item.status.textContent = 'Read aloud is unavailable in this browser.'; return;
-      }
-      stopSpeech();
-      const utterance = new SpeechSynthesisUtterance(item.result.querySelector('.description').textContent);
-      // Prefer an English voice installed on the device. Enhanced voices get priority.
-      const voices = window.speechSynthesis.getVoices().filter(v => v.localService && /^en(?:-|_)/i.test(v.lang));
-      const score = v => (/enhanced|premium|natural/i.test(v.name) ? 4 : 0) + (v.default ? 2 : 0) + (/^en-US$/i.test(v.lang) ? 1 : 0);
-      voices.sort((a, b) => score(b) - score(a));
-      if (voices[0]) utterance.voice = voices[0];
-      utterance.lang = voices[0]?.lang || 'en-US';
-      utterance.rate = 0.95; utterance.pitch = 1; utterance.volume = 1;
-      const session = {item, read, pause, utterance};
-      narration = session;
-      read.textContent = 'Stop reading'; read.setAttribute('aria-pressed', 'true');
-      pause.hidden = false;
-      utterance.onend = () => finishSpeech(session);
-      utterance.onerror = event => {
-        if (narration !== session) return;
-        finishSpeech(session);
-        if (!['canceled', 'interrupted'].includes(event.error)) item.status.textContent = 'Audio playback failed. Try Read aloud again or check your device speech settings.';
-      };
-      try {
-        // Cancel does not necessarily clear the synthesizer's paused state.
-        if (window.speechSynthesis.paused) window.speechSynthesis.resume();
-        window.speechSynthesis.speak(utterance);
-      }
-      catch { finishSpeech(session); item.status.textContent = 'Audio playback failed. Try Read aloud again.'; }
-    });
+    const voiceLabel = el('label', 'Narration voice ');
+    const voice = el('select', '', {'aria-label': 'Narration voice'});
+    for (const [value, label] of [['af_heart', 'Natural — US, Heart'], ...KOKORO_VOICES.slice(1), ['system', 'Device voice']]) {
+      voice.append(el('option', label, {value}));
+    }
+    voiceLabel.append(voice);
+    const speedLabel = el('label', 'Speed ');
+    const speed = el('input', '', {type: 'range', min: '0.8', max: '1.2', step: '0.05', value: '1', 'aria-label': 'Narration speed'});
+    const speedValue = el('span', '1.00×');
+    speed.addEventListener('input', () => { speedValue.textContent = `${Number(speed.value).toFixed(2)}×`; });
+    speedLabel.append(speed, speedValue);
+    const preview = button('Preview voice', () => startSpeech(item, read, pause, 'Here is a preview of this reading voice.', voice.value, Number(speed.value), true));
+    const settings = el('div', '', {class: 'wiki-speech-settings'});
+    settings.append(voiceLabel, speedLabel, preview);
+    const read = button('Read aloud', () => startSpeech(
+      item, read, pause, item.result.querySelector('.description').textContent, voice.value, Number(speed.value),
+    ));
     read.setAttribute('aria-controls', item.result.id);
     read.setAttribute('aria-pressed', 'false');
     const pause = button('Pause reading', () => {
       if (narration?.item !== item) return;
       if (pause.textContent === 'Pause reading') {
-        window.speechSynthesis.pause(); pause.textContent = 'Resume reading';
+        if (narration.kind === 'audio') narration.player?.pause();
+        else window.speechSynthesis.pause();
+        pause.textContent = 'Resume reading';
       } else {
-        window.speechSynthesis.resume(); pause.textContent = 'Pause reading';
+        if (narration.kind === 'audio') narration.player?.play().catch(() => {});
+        else window.speechSynthesis.resume();
+        pause.textContent = 'Pause reading';
       }
     });
     pause.hidden = true;
-    return [read, pause];
+    return [settings, read, pause];
   }
   function disable() {
     stopSpeech();
@@ -170,7 +250,7 @@
   function enable() {
     if (!WikiContext.supported()) return;
     enabled = true; pageURL = location.href;
-    window.speechSynthesis?.getVoices(); // Trigger asynchronous voice discovery before first playback.
+    window.speechSynthesis?.getVoices(); // Trigger asynchronous system voice discovery.
     panel = el('section', '', {id: 'wiki-description-panel', 'aria-labelledby': 'wiki-description-title'});
     const style = el('style'); style.textContent = `
       #wiki-description-panel {
@@ -209,9 +289,14 @@
       .wiki-description-surface .metadata {font-size:0.82rem;color:#64748b;margin-bottom:6px;}
       .wiki-description-surface .limitations {font-size:0.82rem;color:#94a3b8;}
       .wiki-btn-group {display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;}
+      .wiki-speech-settings {display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:8px 4px;}
+      .wiki-speech-settings label {display:inline-flex;align-items:center;gap:6px;font-size:0.88rem;}
+      .wiki-speech-settings select, .wiki-speech-settings input {font:inherit;}
+      .wiki-speech-settings select {max-width:15rem;padding:5px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#0f172a;}
+      .wiki-speech-settings span {font-variant-numeric:tabular-nums;}
     `;
     panel.append(style, el('h2', 'Wikipedia image descriptions', {id: 'wiki-description-title', tabindex: '-1'}),
-      el('p', 'Experimental AI descriptions. The selected public image and bounded article context are sent to your local backend. Existing captions and alt text remain available.'),
+      el('p', 'Experimental AI descriptions. The selected public image, bounded article context, and optional narration text are sent to your local backend. Model assets may download from their upstream hosts on first use. Existing captions and alt text remain available.'),
       button('Disable for this page', disable));
     list = el('div', '', {'aria-label': 'Article image controls'});
     panel.append(el('p', 'Choose a Describe button beside an image. Its result will appear there.'), list);

@@ -16,3 +16,5 @@ class Settings:
     load_model: bool = os.getenv('LOAD_MODEL', '1') == '1'
     max_tokens: int = int(os.getenv('MAX_NEW_TOKENS', '192'))
     cache_path: str = os.getenv('DESCRIPTION_CACHE_PATH', 'artifacts/cache.sqlite3')
+    neural_tts_enabled: bool = os.getenv('NEURAL_TTS_ENABLED', '1') == '1'
+    neural_tts_warmup: bool = os.getenv('NEURAL_TTS_WARMUP', '1') == '1'

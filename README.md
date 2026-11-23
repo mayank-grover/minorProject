@@ -15,6 +15,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 pip install -r requirements-models.txt
+pip install -r requirements-tts.in
 cp .env.example .env
 python -m scripts.configure
 ```
@@ -40,6 +41,10 @@ Keep the terminal open. The first launch may download model files. Wait for “A
 5. Open a Wikipedia article, reload the page, and use **Describe** beside an image.
 
 The extension’s backend health button checks that the local service is reachable. A green health check does not verify model quality.
+
+### Natural voice narration
+
+Read aloud uses the optional local Kokoro neural speech model by default, with a device speech voice as a fallback. Choose an American or British English voice, preview it, and adjust the rate beside the generated description. The backend prepares the model and offered voice packs during startup, then synthesizes a short warm-up phrase before reporting ready. The first startup may take longer while it downloads Kokoro weights, voice packs, and English pronunciation data from their upstream hosts. The text being spoken stays on the computer, and cached assets can be used offline. Set `NEURAL_TTS_WARMUP=0` to skip startup preparation or `NEURAL_TTS_ENABLED=0` to disable neural narration. Kokoro and its English pronunciation dependencies have their own licenses; preserve their notices if redistributing the software or model assets.
 
 ## Demo mode (no model required)
 

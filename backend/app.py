@@ -9,15 +9,16 @@ from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
-from backend.schemas import DescribeRequest, DescribeResponse
+from backend.schemas import DescribeRequest, DescribeResponse, SpeechRequest
 from backend.settings import Settings
 from backend.models.smolvlm import SmolVLM
 from backend.data.images import fetch_image, decode_base64, prepare_image
 from backend.engine.generate import run_generation
 from backend.engine.prompts import PROMPT_VERSION
+from backend.engine.speech import KokoroSpeech
 from backend.errors import ProjectError
 from backend.data.redis_cache import HybridDescriptionCache
 
@@ -29,6 +30,7 @@ def create_app(settings=None, model=None):
     cache = HybridDescriptionCache(sqlite_path=settings.cache_path)
     lane = threading.Lock()
     executor = ThreadPoolExecutor(max_workers=1)
+    speech = KokoroSpeech()
 
     @asynccontextmanager
     async def lifespan(app):
@@ -38,6 +40,13 @@ def create_app(settings=None, model=None):
                 log.info('Model ready: %s', adapter.model_id)
             except Exception as exc:
                 log.error('Model unavailable (%s). See setup instructions.', type(exc).__name__)
+        if settings.neural_tts_enabled and settings.neural_tts_warmup:
+            log.info('Preparing local neural speech model and voice packs. First startup may download assets.')
+            try:
+                await asyncio.get_running_loop().run_in_executor(executor, speech.warmup)
+                log.info('Natural speech ready.')
+            except Exception as exc:
+                log.warning('Natural speech warm-up failed (%s); it can be retried from Read aloud.', type(exc).__name__)
         yield
         executor.shutdown(wait=False, cancel_futures=True)
 
@@ -52,7 +61,7 @@ def create_app(settings=None, model=None):
         origin = request.headers.get('origin')
         if origin and origin not in origins:
             return JSONResponse({'error': {'code': 'ORIGIN_DENIED', 'message': 'Configure this extension ID on the backend.', 'retryable': False}}, status_code=403)
-        if request.url.path in ('/describe', '/v1/descriptions'):
+        if request.url.path in ('/describe', '/v1/descriptions', '/v1/speech'):
             try:
                 size = int(request.headers.get('content-length', 0))
             except ValueError:
@@ -87,6 +96,8 @@ def create_app(settings=None, model=None):
                 'ocr_engine': getattr(getattr(adapter, 'ocr', None), 'engine', 'unavailable'),
                 'authentication_configured': bool(settings.token),
                 'extension_configured': bool(settings.extension_id),
+                'neural_tts_enabled': settings.neural_tts_enabled,
+                'neural_tts_ready': speech.ready,
                 'configuration_fingerprint': hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()[:16]}
 
     def work(payload):
@@ -167,6 +178,23 @@ def create_app(settings=None, model=None):
             # Retrieve late exceptions to avoid unhandled-future warnings.
             future.add_done_callback(lambda f: f.exception() if not f.cancelled() else None)
             raise ProjectError('GENERATION_TIMEOUT', 'Generation exceeded the deadline. Wait for the model to finish before retrying.', 504, True) from None
+
+    @app.post('/v1/speech')
+    async def synthesize_speech(payload: SpeechRequest, request: Request):
+        if not settings.neural_tts_enabled:
+            raise ProjectError('TTS_DISABLED', 'Natural voice synthesis is disabled in the local backend.', 503)
+        expected = 'Bearer ' + settings.token
+        if not settings.token or not hmac.compare_digest(request.headers.get('authorization', ''), expected):
+            raise ProjectError('UNAUTHORIZED', 'Configure the local backend token in extension options.', 401)
+        future = asyncio.get_running_loop().run_in_executor(
+            executor, speech.synthesize, payload.text, payload.voice, payload.speed,
+        )
+        try:
+            audio = await asyncio.wait_for(asyncio.shield(future), settings.timeout)
+        except asyncio.TimeoutError:
+            future.add_done_callback(lambda f: f.exception() if not f.cancelled() else None)
+            raise ProjectError('TTS_TIMEOUT', 'Natural voice synthesis timed out. Try the system voice.', 504, True) from None
+        return Response(content=audio, media_type='audio/wav', headers={'Cache-Control': 'no-store'})
 
     return app
 

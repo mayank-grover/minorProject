@@ -84,3 +84,16 @@ class DescribeResponse(StrictModel):
     context_hash: str
     generated: Literal[True] = True
     limitations: list[str]
+
+
+class SpeechRequest(StrictModel):
+    text: str = Field(min_length=1, max_length=3000)
+    voice: Literal['af_heart', 'af_bella', 'af_sarah', 'af_nicole', 'af_sky',
+                   'am_adam', 'am_michael', 'bf_emma', 'bf_isabella',
+                   'bm_george', 'bm_lewis'] = 'af_heart'
+    speed: float = Field(default=1.0, ge=0.8, le=1.2)
+
+    @field_validator('text', mode='before')
+    @classmethod
+    def trim_text(cls, value):
+        return value.strip() if isinstance(value, str) else value

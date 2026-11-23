@@ -1,0 +1,2 @@
+# Optional local neural narration. Install in the same Python 3.11/3.12 environment.
+kokoro==0.9.4
