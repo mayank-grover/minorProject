@@ -6,7 +6,7 @@ from pathlib import Path
 import socket
 import sys
 from urllib.request import build_opener, ProxyHandler
-
+import subprocess
 
 def check_existing_server():
     """Return None if the port is free, otherwise a launcher exit code."""
@@ -64,8 +64,11 @@ def main():
     print('Keep this terminal open. Press Control+C to stop.', flush=True)
     # Replace the launcher so Control+C reaches the server directly. The project
     # interpreter works even when python3 is macOS's older system Python.
-    os.execve(str(python), [str(python), '-m', 'uvicorn', 'backend.app:app',
-                          '--host', '127.0.0.1', '--port', '8000'], env)
+    try:
+        return subprocess.call([str(python), '-m', 'uvicorn', 'backend.app:app',
+                            '--host', '127.0.0.1', '--port', '8000'], env=env)
+    except KeyboardInterrupt:
+        return 0
 
 
 if __name__ == '__main__':
